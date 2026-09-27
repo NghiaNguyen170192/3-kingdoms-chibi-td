@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>3 Kingdom Chibi</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background: #0e120c;
+        color: #f4ecd2;
+        font-family: Arial, sans-serif;
+      }
+      #wrap {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 12px 16px 24px;
+        box-sizing: border-box;
+      }
+      h1 {
+        margin: 8px 0 4px;
+        font-size: 20px;
+      }
+      .lead {
+        margin: 0 0 10px;
+        color: #c8d6a3;
+        font-size: 13px;
+      }
+      #play {
+        display: flex;
+        gap: 16px;
+        align-items: flex-start;
+        max-width: 1400px;
+      }
+      #game {
+        box-shadow: 0 12px 40px #0008;
+      }
+      #sidebar {
+        width: 340px;
+        background: #1a2116;
+        border: 1px solid #3d4a30;
+        padding: 12px;
+        box-sizing: border-box;
+        min-height: 400px;
+        max-height: 92vh;
+        overflow: auto;
+      }
+      #roster h2,
+      #hero-sheet h2 {
+        margin: 0 0 8px;
+        font-size: 16px;
+      }
+      #roster-search,
+      #roster-type,
+      #roster-sort {
+        width: 100%;
+        box-sizing: border-box;
+        margin-bottom: 6px;
+        padding: 6px;
+        background: #11170f;
+        color: #f4ecd2;
+        border: 1px solid #3d4a30;
+      }
+      .roster-filters {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+      }
+      .roster-list {
+        max-height: 280px;
+        overflow: auto;
+        margin: 8px 0 16px;
+      }
+      .roster-card {
+        display: grid;
+        grid-template-columns: 1fr 32px;
+        gap: 4px;
+        margin-bottom: 6px;
+      }
+      .roster-card .pick,
+      .roster-card .fav {
+        border: 1px solid #6a7a50;
+        background: #2a3322;
+        color: #f4ecd2;
+        cursor: pointer;
+        text-align: left;
+      }
+      .roster-card .pick {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        padding: 6px;
+        font-size: 12px;
+      }
+      .roster-card.selected .pick {
+        outline: 2px solid #7cff7c;
+      }
+      .roster-card.deployed .pick {
+        background: #3a4a28;
+      }
+      .roster-card.type-speed .pick {
+        border-left: 4px solid #4aa3ff;
+      }
+      .roster-card.type-damager .pick {
+        border-left: 4px solid #e24b4b;
+      }
+      .roster-card.type-mage .pick {
+        border-left: 4px solid #b56bff;
+      }
+      .roster-card .fav {
+        font-size: 18px;
+      }
+      .check {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin: 0 0 10px;
+        font-size: 14px;
+      }
+      #next-wave {
+        display: none;
+        width: 100%;
+        margin-bottom: 12px;
+        padding: 8px;
+        font-size: 15px;
+        font-weight: bold;
+        background: #7cff7c;
+        border: 0;
+        cursor: pointer;
+      }
+      #next-wave.visible {
+        display: block;
+      }
+      #hero-sheet h2 {
+        margin: 0 0 4px;
+        font-size: 18px;
+      }
+      #hero-sheet h3 {
+        margin: 12px 0 6px;
+        font-size: 14px;
+      }
+      #hero-sheet small {
+        color: #c8d6a3;
+        font-weight: normal;
+      }
+      #hero-sheet .stats,
+      #hero-sheet .muted {
+        color: #c8d6a3;
+        font-size: 12px;
+      }
+      #hero-sheet .warn {
+        color: #ffb4b4;
+        font-size: 12px;
+      }
+      #hero-sheet .row {
+        display: grid;
+        grid-template-columns: 76px 1fr;
+        gap: 6px;
+        margin-bottom: 6px;
+        font-size: 12px;
+      }
+      #hero-sheet button {
+        cursor: pointer;
+        border: 1px solid #6a7a50;
+        background: #2a3322;
+        color: #f4ecd2;
+        padding: 4px 6px;
+        text-align: left;
+      }
+      #hero-sheet .inv {
+        display: block;
+        width: 100%;
+        margin-bottom: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="wrap">
+      <h1>3 Kingdom Chibi</h1>
+      <p class="lead">Place heroes, fight a wave, then change formation and gear while paused.</p>
+      <div id="play">
+        <div id="game"></div>
+        <aside id="sidebar">
+          <label class="check"><input type="checkbox" id="auto-wave" /> Auto next wave</label>
+          <button id="next-wave" type="button">Next wave</button>
+          <div id="roster"></div>
+          <div id="hero-sheet"></div>
+        </aside>
+      </div>
+    </div>
+    <script type="module" src="/src/game/main.ts"></script>
+  </body>
+</html>
