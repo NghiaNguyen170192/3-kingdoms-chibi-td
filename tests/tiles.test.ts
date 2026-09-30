@@ -44,6 +44,23 @@ describe("tile map", () => {
     expect(chebyshevTiles(a.x, a.y, tileCenter(8, 5).x, tileCenter(8, 5).y)).toBe(3);
   });
 
+  it("keeps dirt on the route and grass on the placeable tiles beside it", () => {
+    const grid = generateTiles(MVP_MAP);
+    const center = grid[2]![4]!;
+    expect(center.kind).toBe("route");
+    expect(center.sheetCol).toBe(2);
+    expect(center.sheetRow).toBe(1);
+    const beside = grid[1]![4]!;
+    expect(beside.kind).toBe("grass");
+    expect(beside.placeable).toBe(true);
+    expect(beside.sheetRow).toBe(5);
+    const straight = grid.flat().find((t) => t.kind === "route" && t.row === 7 && t.col === 16)!;
+    expect(grid[straight.row - 1]![straight.col]!.kind).toBe("grass");
+    expect(grid[straight.row - 1]![straight.col]!.placeable).toBe(true);
+    expect(grid[straight.row - 1]![straight.col]!.sheetRow).toBe(5);
+    expect(grid[straight.row + 1]![straight.col]!.sheetRow).toBe(5);
+  });
+
   it("has a castle tile at the shared destination", () => {
     const tiles = generateTiles(MVP_MAP).flat();
     expect(tiles.filter((t) => t.kind === "castle")).toHaveLength(1);

@@ -38,6 +38,32 @@ export const GEM_MERGE = {
   inputCount: 3,
 } as const;
 
+/** Sockets belong to the hero, not the item. Mythic is the cap. */
+export const GEM_SOCKETS_BY_RARITY: Record<Rarity, number> = {
+  normal: 1,
+  magic: 2,
+  rare: 3,
+  unique: 4,
+  legendary: 5,
+  mythic: 6,
+};
+
+export const MAX_GEM_SOCKETS = GEM_SOCKETS_BY_RARITY.mythic;
+
+export const HERO_MERGE = {
+  inputCount: 3,
+} as const;
+
+/** Account energy. One point starts one wave. A cleared pass may drop a battery. */
+export const ENERGY = {
+  max: 100,
+  perWave: 1,
+  batteryValues: [1, 2, 5],
+} as const;
+
+/** Flat chance for items, gems, fragments, and a pass energy battery. */
+export const DROP_CHANCE = 0.05;
+
 function speedHero(
   id: string,
   name: string,
@@ -59,7 +85,7 @@ function speedHero(
     critMultiplier: 2,
     cleaveRadius: 0,
     aoeRadius: 0,
-    gemSockets: 3,
+    gemSockets: GEM_SOCKETS_BY_RARITY[rarity],
   };
 }
 
@@ -84,7 +110,7 @@ function damagerHero(
     critMultiplier: 1.7,
     cleaveRadius: 1,
     aoeRadius: 0,
-    gemSockets: 3,
+    gemSockets: GEM_SOCKETS_BY_RARITY[rarity],
   };
 }
 
@@ -109,26 +135,26 @@ function mageHero(
     critMultiplier: 1.8,
     cleaveRadius: 0,
     aoeRadius: 1,
-    gemSockets: 3,
+    gemSockets: GEM_SOCKETS_BY_RARITY[rarity],
   };
 }
 
 export const HERO_DEFS: HeroDef[] = [
-  speedHero("zhao-yun", "Zhao Yun", "rare", 8, 2.0, 0.2),
-  speedHero("ma-chao", "Ma Chao", "unique", 9, 2.15, 0.22),
-  speedHero("gan-ning", "Gan Ning", "magic", 7, 2.35, 0.16),
-  speedHero("taishi-ci", "Taishi Ci", "legendary", 10, 2.25, 0.24),
-  speedHero("sun-ce", "Sun Ce", "rare", 8, 1.9, 0.18),
-  damagerHero("guan-yu", "Guan Yu", "unique", 26, 0.55, 0.08),
-  damagerHero("zhang-fei", "Zhang Fei", "rare", 24, 0.62, 0.07),
+  speedHero("zhao-yun", "Zhao Yun", "mythic", 8, 2.0, 0.2),
+  speedHero("ma-chao", "Ma Chao", "mythic", 9, 2.15, 0.22),
+  speedHero("gan-ning", "Gan Ning", "mythic", 7, 2.35, 0.16),
+  speedHero("taishi-ci", "Taishi Ci", "mythic", 10, 2.25, 0.24),
+  speedHero("sun-ce", "Sun Ce", "mythic", 8, 1.9, 0.18),
+  damagerHero("guan-yu", "Guan Yu", "mythic", 26, 0.55, 0.08),
+  damagerHero("zhang-fei", "Zhang Fei", "mythic", 24, 0.62, 0.07),
   damagerHero("lu-bu", "Lü Bu", "mythic", 32, 0.5, 0.12),
-  damagerHero("xu-chu", "Xu Chu", "magic", 22, 0.58, 0.06),
-  damagerHero("dian-wei", "Dian Wei", "legendary", 28, 0.52, 0.1),
-  mageHero("zhuge-liang", "Zhuge Liang", "legendary", 16, 0.75, 0.1),
-  mageHero("sima-yi", "Sima Yi", "unique", 17, 0.8, 0.12),
-  mageHero("pang-tong", "Pang Tong", "rare", 15, 0.85, 0.09),
-  mageHero("guo-jia", "Guo Jia", "magic", 14, 0.92, 0.08),
-  mageHero("zhou-yu", "Zhou Yu", "rare", 16, 0.78, 0.11),
+  damagerHero("xu-chu", "Xu Chu", "mythic", 22, 0.58, 0.06),
+  damagerHero("dian-wei", "Dian Wei", "mythic", 28, 0.52, 0.1),
+  mageHero("zhuge-liang", "Zhuge Liang", "mythic", 16, 0.75, 0.1),
+  mageHero("sima-yi", "Sima Yi", "mythic", 17, 0.8, 0.12),
+  mageHero("pang-tong", "Pang Tong", "mythic", 15, 0.85, 0.09),
+  mageHero("guo-jia", "Guo Jia", "mythic", 14, 0.92, 0.08),
+  mageHero("zhou-yu", "Zhou Yu", "mythic", 16, 0.78, 0.11),
 ];
 
 export const ENEMY_DEFS: Record<string, EnemyDef> = {
@@ -396,7 +422,7 @@ export const MVP_MAP: MapDef = {
       waypoints: [
         { x: 0, y: 20 },
         { x: 80, y: 20 },
-        { x: 140, y: 70 },
+        { x: 80, y: 70 },
         { x: 220, y: 70 },
       ],
     },
@@ -405,7 +431,7 @@ export const MVP_MAP: MapDef = {
       waypoints: [
         { x: 0, y: 120 },
         { x: 80, y: 120 },
-        { x: 140, y: 70 },
+        { x: 80, y: 70 },
         { x: 220, y: 70 },
       ],
     },
@@ -445,8 +471,27 @@ export const MVP_MAP: MapDef = {
         { type: "elite", count: 3, eliteModifiers: ["fast", "regenerating"] },
       ],
     },
+    { wave: 10, delay: 2.4, spawnInterval: 0.48, packs: [{ type: "troop", count: 12 }, { type: "scout", count: 6 }] },
+    { wave: 11, delay: 2.4, spawnInterval: 0.48, packs: [{ type: "brute", count: 4 }, { type: "scout", count: 6 }] },
+    { wave: 12, delay: 2.5, spawnInterval: 0.46, packs: [{ type: "troop", count: 10 }, { type: "elite", count: 2, eliteModifiers: ["fast"] }] },
+    { wave: 13, delay: 2.5, spawnInterval: 0.46, packs: [{ type: "brute", count: 3 }, { type: "elite", count: 3, eliteModifiers: ["armoured"] }] },
+    { wave: 14, delay: 2.5, spawnInterval: 0.45, packs: [{ type: "scout", count: 8 }, { type: "brute", count: 4 }] },
+    { wave: 15, delay: 2.6, spawnInterval: 0.5, packs: [{ type: "elite", count: 4, eliteModifiers: ["regenerating"] }, { type: "troop", count: 8 }] },
+    { wave: 16, delay: 2.6, spawnInterval: 0.45, packs: [{ type: "brute", count: 5 }, { type: "elite", count: 2, eliteModifiers: ["fireResistant"] }] },
+    { wave: 17, delay: 2.6, spawnInterval: 0.44, packs: [{ type: "scout", count: 8 }, { type: "elite", count: 3, eliteModifiers: ["fast", "armoured"] }] },
+    { wave: 18, delay: 2.8, spawnInterval: 0.44, packs: [{ type: "brute", count: 4 }, { type: "elite", count: 4, eliteModifiers: ["criticalResistant"] }] },
     {
-      wave: 10,
+      wave: 19,
+      delay: 2.8,
+      spawnInterval: 0.42,
+      packs: [
+        { type: "troop", count: 12 },
+        { type: "brute", count: 4 },
+        { type: "elite", count: 3, eliteModifiers: ["regenerating", "armoured"] },
+      ],
+    },
+    {
+      wave: 20,
       delay: 3,
       spawnInterval: 0.8,
       packs: [

@@ -176,12 +176,65 @@
         width: 100%;
         margin-bottom: 6px;
       }
+      #inventory {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: #000a;
+        z-index: 5;
+        align-items: flex-start;
+        justify-content: center;
+        padding: 32px 16px;
+        box-sizing: border-box;
+        overflow: auto;
+      }
+      #inventory.open {
+        display: flex;
+      }
+      .inv-panel {
+        width: min(520px, 100%);
+        background: #1a2116;
+        border: 1px solid #3d4a30;
+        padding: 16px;
+        box-sizing: border-box;
+      }
+      .inv-panel h2,
+      .inv-panel h3 {
+        margin: 12px 0 6px;
+      }
+      .inv-panel h2 {
+        margin-top: 0;
+      }
+      .inv-panel .muted,
+      .inv-panel .stats {
+        color: #c8d6a3;
+        font-size: 13px;
+      }
+      .inv-panel ul {
+        margin: 6px 0 12px;
+        padding-left: 18px;
+        font-size: 13px;
+      }
+      .inv-panel button {
+        cursor: pointer;
+        border: 1px solid #6a7a50;
+        background: #2a3322;
+        color: #f4ecd2;
+        padding: 6px 8px;
+        margin: 0 6px 6px 0;
+      }
+      #inventory-close {
+        background: #7cff7c;
+        color: #111;
+        font-weight: bold;
+        border: 0;
+      }
     </style>
   </head>
   <body>
     <div id="wrap">
       <h1>3 Kingdom Chibi</h1>
-      <p class="lead">Place heroes, fight a wave, then change formation and gear while paused.</p>
+      <p class="lead">Place heroes, fight a wave, then change formation and gear while paused. Every hero uses the same model — outfit, hair, and weapon tell them apart.</p>
       <div id="play">
         <div id="game"></div>
         <aside id="sidebar">
@@ -190,6 +243,13 @@
           <div id="roster"></div>
           <div id="hero-sheet"></div>
         </aside>
+      </div>
+      <div id="inventory">
+        <div class="inv-panel">
+          <h2 id="inventory-title">Spoils</h2>
+          <div id="inventory-body"></div>
+          <button id="inventory-close" type="button">Close</button>
+        </div>
       </div>
     </div>
     <script type="module" src="/src/game/main.ts"></script>

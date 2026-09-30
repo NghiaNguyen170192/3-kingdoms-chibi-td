@@ -21,7 +21,7 @@ export function deployAll(player: PlayerState): BattleDeployment[] {
 }
 
 export function runBattle(player: PlayerState, seed: number): RunReport {
-  const result = simulateBattle(deployAll(player), { seed, map: playMap() });
+  const result = simulateBattle(deployAll(player), { seed, map: playMap(), account: player });
   collectLoot(player, result.loot);
   return { result, summary: describeResult(player, result) };
 }
@@ -44,7 +44,7 @@ export function describeResult(player: PlayerState, result: BattleResult): strin
     `Kills  troop ${result.kills.troop}  scout ${result.kills.scout}  brute ${result.kills.brute}  elite ${result.kills.elite}  boss ${result.kills.boss}`,
   );
   lines.push(
-    `Loot   gold +${result.loot.gold}  items ${result.loot.items.length}  gems ${result.loot.gems.length}`,
+    `Loot   gold +${result.loot.gold}  items ${result.loot.items.length}  gems ${result.loot.gems.length}${result.loot.energy ? `  energy +${result.loot.energy}` : ""}`,
   );
   for (const item of result.loot.items) lines.push(`  item  ${formatItem(item)}`);
   for (const gem of result.loot.gems) lines.push(`  gem   ${gem.name} Lv.${gem.level}`);

@@ -19,7 +19,7 @@ export function queryRoster(heroes: HeroInstance[], query: RosterQuery = {}): He
     const def = heroDef(hero.defId);
     if (type && def.archetype !== type) return false;
     if (!search) return true;
-    const hay = [def.id, def.name, def.archetype, def.rarity].map(normalize).join(" ");
+    const hay = [def.id, def.name, def.archetype, hero.rarity].map(normalize).join(" ");
     return hay.includes(normalize(search));
   });
 
@@ -28,7 +28,7 @@ export function queryRoster(heroes: HeroInstance[], query: RosterQuery = {}): He
     const db = heroDef(b.defId);
     if (sort === "dps-asc") return estimatedDps(a) - estimatedDps(b);
     if (sort === "dps-desc") return estimatedDps(b) - estimatedDps(a);
-    if (sort === "rarity") return RARITY_ORDER.indexOf(db.rarity) - RARITY_ORDER.indexOf(da.rarity);
+    if (sort === "rarity") return RARITY_ORDER.indexOf(b.rarity) - RARITY_ORDER.indexOf(a.rarity);
     if (sort === "favorite") {
       if (a.favorite !== b.favorite) return a.favorite ? -1 : 1;
       return estimatedDps(b) - estimatedDps(a);

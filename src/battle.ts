@@ -5,15 +5,17 @@ import {
   blankResist,
   currentSpeed,
   dist,
+  dotElement,
   hitDamage,
+  imbuedElements,
   tickDots,
   tickRegen,
   tickStatuses,
   type CombatEnemy,
 } from "./combat.js";
-import { ENEMY_DEFS, heroDef } from "./data.js";
+import { ENERGY, ENEMY_DEFS, heroDef } from "./data.js";
 import { chebyshevTiles, playMap } from "./map/tiles.js";
-import { emptyLoot, mergeLoot, rollKillLoot } from "./loot.js";
+import { emptyLoot, mergeLoot, rollKillLoot, rollPassBattery } from "./loot.js";
 import { createId, Rng } from "./rng.js";
 import { computeHeroStats, partyGoldFind, partyItemFind } from "./stats.js";
 import type {
@@ -26,10 +28,11 @@ import type {
   HeroInstance,
   LootDrop,
   MapDef,
+  PlayerState,
 } from "./types.js";
 
 export const TICK = 0.05;
-const MAX_TIME = 240;
+const MAX_TIME = 480;
 
 export interface BattleHero {
   instance: HeroInstance;
@@ -48,6 +51,7 @@ function routeLength(waypoints: { x: number; y: number }[]): number {
   return len;
 }
 
+/** Walk the route polyline from the first waypoint to the last. There is no grid search. */
 function advanceAlongRoute(enemy: CombatEnemy, map: MapDef, dt: number): void {
   const route = map.routes[enemy.routeIndex]!;
   const speed = currentSpeed(enemy);
@@ -201,6 +205,7 @@ export class BattleRuntime {
   autoNextWave: boolean;
 
   private readonly rng: Rng;
+  private readonly account?: PlayerState;
   private readonly recordAll: boolean;
   private itemFind = 0;
   private goldFind = 0;
@@ -226,10 +231,17 @@ export class BattleRuntime {
 
   constructor(
     deployments: BattleDeployment[],
-    options: { seed?: number; map?: MapDef; recordAllEvents?: boolean; autoNextWave?: boolean } = {},
+    options: {
+      seed?: number;
+      map?: MapDef;
+      recordAllEvents?: boolean;
+      autoNextWave?: boolean;
+      account?: PlayerState;
+    } = {},
   ) {
     this.map = options.map ?? playMap();
     this.rng = new Rng(options.seed ?? 1);
+    this.account = options.account;
     this.recordAll = options.recordAllEvents ?? false;
     this.autoNextWave = options.autoNextWave ?? true;
     this.castleHp = this.map.castleHp;
@@ -259,6 +271,24 @@ export class BattleRuntime {
     this.paused = false;
     this.waitingForNextWave = false;
     this.waveCountdown = 0;
+  }
+
+  canAffordNextWave(): boolean {
+    return !this.account || this.account.energy >= ENERGY.perWave;
+  }
+
+  private spendWaveEnergy(): boolean {
+    if (!this.account) return true;
+    if (this.account.energy < ENERGY.perWave) return false;
+    this.account.energy -= ENERGY.perWave;
+    return true;
+  }
+
+  removeHero(heroId: string): void {
+    const index = this.heroes.findIndex((hero) => hero.instance.id === heroId);
+    if (index < 0) return;
+    this.heroes.splice(index, 1);
+    this.recalcFind();
   }
 
   moveHero(heroId: string, slotId: string, hero?: HeroInstance): void {
@@ -361,6 +391,11 @@ export class BattleRuntime {
     ) {
       this.waveCountdown -= TICK;
       if (this.waveCountdown <= 0) {
+        if (!this.spendWaveEnergy()) {
+          this.waitingForNextWave = true;
+          this.paused = true;
+          return stepEvents;
+        }
         const wave = map.waves[this.waveIndex]!;
         this.wave = wave.wave;
         emit({ type: "waveStart", wave: wave.wave });
@@ -394,7 +429,18 @@ export class BattleRuntime {
       const phaseBefore = enemy.phase;
       tickRegen(enemy, TICK);
       tickStatuses(enemy, TICK);
-      tickDots(enemy, TICK, (_kind, damage, sourceHeroId) => this.credit(sourceHeroId, damage));
+      tickDots(enemy, TICK, (kind, damage, sourceHeroId) => {
+        this.credit(sourceHeroId, damage);
+        emit({
+          type: "dot",
+          enemyId: enemy.id,
+          kind,
+          damage,
+          x: enemy.x,
+          y: enemy.y,
+          element: dotElement(kind),
+        });
+      });
       if (enemy.phase !== phaseBefore) emit({ type: "phase", enemyId: enemy.id, phase: enemy.phase });
       if (!enemy.alive) {
         this.killEnemy(enemy, stepEvents);
@@ -460,6 +506,7 @@ export class BattleRuntime {
           crit: hit.crit,
           x: target.x,
           y: target.y,
+          elements: imbuedElements(hero.stats),
         });
         if (target.phase !== phaseBefore) emit({ type: "phase", enemyId: target.id, phase: target.phase });
         if (!target.alive) this.killEnemy(target, stepEvents);
@@ -513,6 +560,11 @@ export class BattleRuntime {
     this.waitingForNextWave = false;
     const victory =
       (forced ?? (this.castleHp > 0 && this.kills.boss > 0 ? "cleared" : "escaped")) === "cleared";
+    if (victory) {
+      const battery = rollPassBattery(this.rng);
+      this.loot.energy += battery;
+      this.freshLoot.energy += battery;
+    }
     const reason =
       forced ??
       (this.castleHp <= 0 ? "castleDestroyed" : this.kills.boss > 0 ? "cleared" : "escaped");
@@ -541,12 +593,15 @@ export class BattleRuntime {
 
 export function simulateBattle(
   deployments: BattleDeployment[],
-  options: { seed?: number; map?: MapDef; recordAllEvents?: boolean } = {},
+  options: { seed?: number; map?: MapDef; recordAllEvents?: boolean; account?: PlayerState } = {},
 ): BattleResult {
   const runtime = new BattleRuntime(deployments, { ...options, autoNextWave: true });
   while (!runtime.finished) {
     runtime.step(TICK);
-    if (runtime.waitingForNextWave) runtime.startNextWave();
+    if (runtime.waitingForNextWave) {
+      if (!runtime.canAffordNextWave()) break;
+      runtime.startNextWave();
+    }
   }
   return runtime.finalize();
 }

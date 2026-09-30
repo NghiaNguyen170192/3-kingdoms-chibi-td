@@ -1,6 +1,8 @@
 export type HeroArchetype = "speed" | "damager" | "mage";
 export type EnemyType = "troop" | "scout" | "brute" | "elite" | "boss";
 export type DamageType = "physical" | "fire" | "cold" | "lightning" | "toxic" | "bleed";
+/** Elemental damage from an imbued gem. Order matches the gem list in goals.md. */
+export type ImbuedElement = "lightning" | "cold" | "fire" | "toxic" | "bleed";
 export type WeaponStyle = "oneHand" | "twoHand";
 
 export type EquipSlot =
@@ -140,6 +142,8 @@ export interface HeroDef {
 export interface HeroInstance {
   id: string;
   defId: string;
+  /** Socket count follows this rarity. Testing heroes start at mythic. */
+  rarity: Rarity;
   favorite: boolean;
   equipment: Partial<Record<WornSlot, Item>>;
   gems: Array<Gem | null>;
@@ -228,6 +232,8 @@ export interface LootDrop {
   items: Item[];
   gems: Gem[];
   fragments: Record<string, number>;
+  /** Energy battery gained from clearing the pass. */
+  energy: number;
 }
 
 export interface BattleDeployment {
@@ -247,8 +253,18 @@ export type BattleEvent =
       crit: boolean;
       x: number;
       y: number;
+      /** Imbued gems that added damage to this hit. */
+      elements: ImbuedElement[];
     }
-  | { type: "dot"; enemyId: string; kind: DotKind; damage: number }
+  | {
+      type: "dot";
+      enemyId: string;
+      kind: DotKind;
+      damage: number;
+      x: number;
+      y: number;
+      element: ImbuedElement;
+    }
   | { type: "status"; enemyId: string; kind: StatusKind }
   | { type: "phase"; enemyId: string; phase: number }
   | { type: "death"; enemyId: string; enemyType: EnemyType }
@@ -270,6 +286,8 @@ export interface BattleResult {
 
 export interface PlayerState {
   gold: number;
+  /** Spend 1 to start each wave. Capped at ENERGY.max. */
+  energy: number;
   heroes: HeroInstance[];
   inventory: Item[];
   gems: Gem[];

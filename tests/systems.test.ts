@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { BattleRuntime, simulateBattle, defaultSlots, TICK } from "../src/battle.js";
-import { hitDamage, applyDamage, applyOnHit, tickDots, blankResist } from "../src/combat.js";
-import { ENEMY_DEFS, EQUIPMENT_MERGE, GEM_MERGE, MVP_MAP, nextRarity } from "../src/data.js";
+import { hitDamage, applyDamage, applyOnHit, tickDots, blankResist, imbuedElements } from "../src/combat.js";
+import { DROP_CHANCE, ENERGY, ENEMY_DEFS, EQUIPMENT_MERGE, GEM_MERGE, GEM_SOCKETS_BY_RARITY, HERO_MERGE, MVP_MAP, nextRarity } from "../src/data.js";
 import { playMap } from "../src/map/tiles.js";
 import { createGem, mergeGems, socketGem } from "../src/gems.js";
 import { generateItem, mergeEquipment } from "../src/items.js";
-import { rollKillLoot } from "../src/loot.js";
-import { autoEquipBest, autoSocketGems, collectLoot, createHero, createNewPlayer, unequip, wear } from "../src/player.js";
+import { rollKillLoot, rollPassBattery } from "../src/loot.js";
+import { addEnergy, autoEquipBest, autoSocketGems, collectLoot, createHero, createNewPlayer, grantClearReward, mergeHeroes, unequip, wear } from "../src/player.js";
 import { Rng, resetIds } from "../src/rng.js";
 import { computeHeroStats } from "../src/stats.js";
 import type { CombatEnemy } from "../src/combat.js";
@@ -48,11 +48,12 @@ function deployStarters(seedHeroes?: HeroInstance[]): BattleDeployment[] {
 }
 
 describe("map data", () => {
-  it("has the MVP layout: 2 routes, 1 destination, 10 waves, 1 boss", () => {
+  it("has the MVP layout: 2 routes, 1 destination, 20 waves, 1 boss", () => {
     expect(MVP_MAP.routes).toHaveLength(2);
     const ends = MVP_MAP.routes.map((r) => r.waypoints.at(-1));
     expect(ends[0]).toEqual(ends[1]);
-    expect(MVP_MAP.waves).toHaveLength(10);
+    expect(MVP_MAP.waves).toHaveLength(20);
+    expect(MVP_MAP.waves.at(-1)?.wave).toBe(20);
     expect(MVP_MAP.waves.at(-1)?.packs.some((p) => p.type === "boss")).toBe(true);
     expect(playMap().slots.length).toBeGreaterThan(20);
     expect(ENEMY_DEFS.troop.leakDamage).toBe(1);
@@ -149,6 +150,55 @@ describe("items and gems", () => {
     expect(GEM_MERGE.inputCount).toBe(3);
   });
 
+  it("sizes sockets from hero rarity and caps mythic at 6", () => {
+    expect(GEM_SOCKETS_BY_RARITY.normal).toBe(1);
+    expect(GEM_SOCKETS_BY_RARITY.magic).toBe(2);
+    expect(GEM_SOCKETS_BY_RARITY.rare).toBe(3);
+    expect(GEM_SOCKETS_BY_RARITY.unique).toBe(4);
+    expect(GEM_SOCKETS_BY_RARITY.legendary).toBe(5);
+    expect(GEM_SOCKETS_BY_RARITY.mythic).toBe(6);
+    const mythic = createHero("zhao-yun");
+    expect(mythic.rarity).toBe("mythic");
+    expect(mythic.gems).toHaveLength(6);
+    expect(createHero("zhao-yun", "normal").gems).toHaveLength(1);
+  });
+
+  it("sockets the five imbued gems on a new hero", () => {
+    resetIds();
+    const hero = createNewPlayer().heroes.find((h) => h.defId === "zhao-yun")!;
+    expect(hero.gems.map((gem) => gem?.family)).toEqual([
+      "lightning",
+      "cold",
+      "fire",
+      "toxic",
+      "bleed",
+      "attackSpeed",
+    ]);
+  });
+
+  it("merges 3 hero copies into the next rarity with more sockets", () => {
+    resetIds();
+    const player = createNewPlayer();
+    const copies = ["normal", "normal", "normal"].map(() => createHero("zhao-yun", "normal"));
+    player.heroes.push(...copies);
+    const out = mergeHeroes(player, copies.map((hero) => hero.id));
+    expect(out.rarity).toBe("magic");
+    expect(out.gems).toHaveLength(GEM_SOCKETS_BY_RARITY.magic);
+    expect(player.heroes.filter((h) => h.defId === "zhao-yun" && h.rarity === "normal")).toHaveLength(0);
+    expect(HERO_MERGE.inputCount).toBe(3);
+  });
+
+  it("grants a mergeable clear reward of items, gems, and a hero", () => {
+    resetIds();
+    const player = createNewPlayer();
+    const before = player.heroes.length;
+    grantClearReward(player, new Rng(1));
+    expect(player.inventory.filter((item) => item.baseId === "dagger" && item.rarity === "normal")).toHaveLength(5);
+    expect(player.gems.filter((gem) => gem.family === "attackSpeed" && gem.level === 1)).toHaveLength(3);
+    expect(player.heroes.length).toBe(before + 3);
+    expect(player.heroes.some((hero) => hero.rarity === "normal")).toBe(true);
+  });
+
   it("sockets gems onto a hero", () => {
     const hero = createHero("zhuge-liang");
     const gem = createGem("lightning", 1);
@@ -166,15 +216,36 @@ describe("items and gems", () => {
 });
 
 describe("loot", () => {
-  it("gives bosses far better drops than troops", () => {
-    const rngA = new Rng(5);
-    const rngB = new Rng(5);
-    const troop = Array.from({ length: 40 }, () => rollKillLoot(rngA, "troop"));
-    const boss = Array.from({ length: 8 }, () => rollKillLoot(rngB, "boss"));
-    const troopItems = troop.reduce((s, l) => s + l.items.length, 0);
-    const bossItems = boss.reduce((s, l) => s + l.items.length, 0);
-    expect(bossItems / boss.length).toBeGreaterThan(troopItems / troop.length);
-    expect(boss.every((l) => l.gold > 10)).toBe(true);
+  it("drops items, gems, and fragments at 5%", () => {
+    expect(DROP_CHANCE).toBe(0.05);
+    const rng = new Rng(5);
+    const drops = Array.from({ length: 800 }, () => rollKillLoot(rng, "boss"));
+    const count = (pick: (loot: (typeof drops)[number]) => number) => drops.reduce((sum, loot) => sum + pick(loot), 0);
+    for (const total of [
+      count((loot) => loot.items.length),
+      count((loot) => loot.gems.length),
+      count((loot) => Object.values(loot.fragments).reduce((sum, n) => sum + n, 0)),
+    ]) {
+      expect(total / drops.length).toBeGreaterThan(0.02);
+      expect(total / drops.length).toBeLessThan(0.09);
+    }
+    expect(drops.every((loot) => loot.gold > 10)).toBe(true);
+    expect(drops.every((loot) => loot.items.length <= 1 && loot.gems.length <= 1)).toBe(true);
+  });
+
+  it("rolls a pass energy battery of 1, 2, or 5", () => {
+    const rng = new Rng(4);
+    const seen = new Set<number>();
+    let hits = 0;
+    for (let i = 0; i < 2000; i++) {
+      const battery = rollPassBattery(rng);
+      if (battery === 0) continue;
+      hits += 1;
+      seen.add(battery);
+    }
+    expect(hits / 2000).toBeGreaterThan(0.03);
+    expect(hits / 2000).toBeLessThan(0.08);
+    expect([...seen].sort((a, b) => a - b)).toEqual([1, 2, 5]);
   });
 });
 
@@ -182,7 +253,7 @@ describe("battle simulation", () => {
   it("emits per-target hit events with damage", () => {
     resetIds();
     const runtime = new BattleRuntime(deployStarters(), { seed: 21 });
-    const hits: Array<{ damage: number; x: number; y: number }> = [];
+    const hits: Array<{ damage: number; x: number; y: number; elements: string[] }> = [];
     for (let i = 0; i < 800 && !runtime.finished; i++) {
       for (const event of runtime.step(TICK)) {
         if (event.type === "hit") hits.push(event);
@@ -190,9 +261,26 @@ describe("battle simulation", () => {
     }
     expect(hits.length).toBeGreaterThan(0);
     expect(hits[0]!.damage).toBeGreaterThan(0);
+    expect(hits[0]!.elements).toEqual([]);
   });
 
-  it("runs the 10-wave map to a conclusion", () => {
+  it("stamps socketed imbued gems onto each hit", () => {
+    resetIds();
+    const mage = createHero("zhuge-liang");
+    socketGem(mage, 0, createGem("lightning"));
+    socketGem(mage, 1, createGem("fire"));
+    expect(imbuedElements(computeHeroStats(mage))).toEqual(["lightning", "fire"]);
+    const runtime = new BattleRuntime(deployStarters([mage]), { seed: 3 });
+    const hits: Array<{ elements: string[] }> = [];
+    for (let i = 0; i < 400 && hits.length === 0 && !runtime.finished; i++) {
+      for (const event of runtime.step(TICK)) {
+        if (event.type === "hit") hits.push(event);
+      }
+    }
+    expect(hits[0]?.elements).toEqual(["lightning", "fire"]);
+  });
+
+  it("runs the 20-wave map to a conclusion", () => {
     resetIds();
     const result = simulateBattle(deployStarters(), { seed: 21 });
     expect(result.time).toBeGreaterThan(10);
@@ -226,6 +314,33 @@ describe("battle simulation", () => {
 });
 
 describe("player loop", () => {
+  it("starts at 100 energy, spends 1 per wave, and caps batteries at 100", () => {
+    resetIds();
+    const player = createNewPlayer();
+    expect(player.energy).toBe(ENERGY.max);
+    const blocked = new BattleRuntime(deployStarters(), { seed: 1, account: player, autoNextWave: false });
+    player.energy = 0;
+    for (let i = 0; i < 20; i++) blocked.step(TICK);
+    expect(blocked.wave).toBe(0);
+    expect(blocked.waitingForNextWave).toBe(true);
+    expect(player.energy).toBe(0);
+
+    player.energy = ENERGY.max;
+    const runtime = new BattleRuntime(deployStarters(), { seed: 1, account: player, autoNextWave: false });
+    for (let i = 0; i < 40 && runtime.wave === 0; i++) runtime.step(TICK);
+    expect(runtime.wave).toBe(1);
+    expect(player.energy).toBe(99);
+    const id = runtime.heroes[0]!.instance.id;
+    runtime.removeHero(id);
+    expect(runtime.heroes.some((hero) => hero.instance.id === id)).toBe(false);
+
+    player.energy = 99;
+    addEnergy(player, 5);
+    expect(player.energy).toBe(100);
+    collectLoot(player, { gold: 0, items: [], gems: [], fragments: {}, energy: 2 });
+    expect(player.energy).toBe(100);
+  });
+
   it("collects loot and can auto-equip it", () => {
     resetIds();
     const player = createNewPlayer();

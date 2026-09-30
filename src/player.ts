@@ -1,12 +1,22 @@
-import { HERO_DEFS, heroDef } from "./data.js";
-import { createGem, gemMergeGroups, mergeGems, socketGem } from "./gems.js";
-import { canWearOn, equipItem, mergeEquipment, mergeGroups, starterWeapon } from "./items.js";
+import {
+  ENERGY,
+  EQUIPMENT_MERGE,
+  GEM_MERGE,
+  GEM_SOCKETS_BY_RARITY,
+  HERO_DEFS,
+  HERO_MERGE,
+  heroDef,
+  nextRarity,
+} from "./data.js";
+import { createGem, gemMergeGroups, mergeGems, socketGem, unsocketGem } from "./gems.js";
+import { canWearOn, equipItem, generateItem, mergeEquipment, mergeGroups, starterWeapon } from "./items.js";
 import { createId } from "./rng.js";
-import type { Gem, HeroInstance, Item, LootDrop, PlayerState, WornSlot } from "./types.js";
+import type { Gem, GemFamily, HeroInstance, Item, LootDrop, PlayerState, Rarity, WornSlot } from "./types.js";
 import type { Rng } from "./rng.js";
 
-export function createHero(defId: string): HeroInstance {
-  const def = heroDef(defId);
+const IMBUED_GEMS: GemFamily[] = ["lightning", "cold", "fire", "toxic", "bleed"];
+
+export function createHero(defId: string, rarity: Rarity = "mythic"): HeroInstance {
   const weapon = starterWeapon(defId);
   const equipment: HeroInstance["equipment"] = {};
   if (weapon.weaponStyle === "twoHand") {
@@ -18,23 +28,29 @@ export function createHero(defId: string): HeroInstance {
   return {
     id: createId("hero"),
     defId,
+    rarity,
     favorite: false,
     equipment,
-    gems: Array.from({ length: def.gemSockets }, () => null),
+    gems: Array.from({ length: GEM_SOCKETS_BY_RARITY[rarity] }, () => null),
   };
+}
+
+function roleGem(defId: string): GemFamily {
+  const archetype = heroDef(defId).archetype;
+  if (archetype === "speed") return "attackSpeed";
+  if (archetype === "damager") return "moreDamage";
+  return "castSpeed";
 }
 
 export function createNewPlayer(): PlayerState {
   const heroes = HERO_DEFS.map((h) => createHero(h.id));
-  const byDef = (id: string) => heroes.find((h) => h.defId === id);
-  const speed = byDef("zhao-yun");
-  const damager = byDef("guan-yu");
-  const mage = byDef("zhuge-liang");
-  if (speed) socketGem(speed, 0, createGem("attackSpeed"));
-  if (damager) socketGem(damager, 0, createGem("moreDamage"));
-  if (mage) socketGem(mage, 0, createGem("lightning"));
+  for (const hero of heroes) {
+    IMBUED_GEMS.forEach((family, index) => socketGem(hero, index, createGem(family)));
+    socketGem(hero, IMBUED_GEMS.length, createGem(roleGem(hero.defId)));
+  }
   return {
     gold: 20,
+    energy: ENERGY.max,
     heroes,
     inventory: [],
     gems: [],
@@ -42,8 +58,28 @@ export function createNewPlayer(): PlayerState {
   };
 }
 
+export function addEnergy(player: PlayerState, amount: number): void {
+  player.energy = Math.min(ENERGY.max, player.energy + amount);
+}
+
+/** Clear reward: one mergeable set each of items, gems, and a hero. */
+export function grantClearReward(player: PlayerState, rng: Rng): void {
+  for (let i = 0; i < EQUIPMENT_MERGE.inputCount; i++) {
+    player.inventory.push(generateItem(rng, "normal", "dagger"));
+  }
+  for (let i = 0; i < GEM_MERGE.inputCount; i++) {
+    player.gems.push(createGem("attackSpeed"));
+  }
+  for (const family of IMBUED_GEMS) player.gems.push(createGem(family));
+  const defId = rng.pick(HERO_DEFS).id;
+  for (let i = 0; i < HERO_MERGE.inputCount; i++) {
+    player.heroes.push(createHero(defId, "normal"));
+  }
+}
+
 export function collectLoot(player: PlayerState, loot: LootDrop): void {
   player.gold += loot.gold;
+  addEnergy(player, loot.energy);
   player.inventory.push(...loot.items);
   player.gems.push(...loot.gems);
   for (const [hero, n] of Object.entries(loot.fragments)) {
@@ -97,6 +133,14 @@ export function wear(
   return `Equipped ${item.name} on ${slot}`;
 }
 
+export function unsocket(player: PlayerState, heroId: string, socketIndex: number): Gem | null {
+  const hero = player.heroes.find((h) => h.id === heroId);
+  if (!hero) throw new Error("Hero not found");
+  const gem = unsocketGem(hero, socketIndex);
+  if (gem) player.gems.push(gem);
+  return gem;
+}
+
 export function socket(player: PlayerState, heroId: string, gemId: string, socketIndex: number): string {
   const hero = player.heroes.find((h) => h.id === heroId);
   if (!hero) throw new Error("Hero not found");
@@ -133,6 +177,49 @@ export function mergePlayerGems(player: PlayerState, gemIds: string[]): Gem {
   player.gems = player.gems.filter((g) => !gemIds.includes(g.id));
   player.gems.push(result);
   return result;
+}
+
+export function mergeHeroes(player: PlayerState, heroIds: string[]): HeroInstance {
+  if (heroIds.length !== HERO_MERGE.inputCount) {
+    throw new Error(`Need ${HERO_MERGE.inputCount} heroes to merge`);
+  }
+  const heroes = heroIds.map((id) => {
+    const hero = player.heroes.find((h) => h.id === id);
+    if (!hero) throw new Error("Hero not found");
+    return hero;
+  });
+  const defId = heroes[0]!.defId;
+  const rarity = heroes[0]!.rarity;
+  if (!heroes.every((h) => h.defId === defId && h.rarity === rarity)) {
+    throw new Error("Merge requires 3 copies of the same hero and rarity");
+  }
+  const upgraded = nextRarity(rarity);
+  if (!upgraded) throw new Error("Hero is already at maximum rarity");
+  const keeper = heroes[0]!;
+  for (const other of heroes.slice(1)) {
+    player.inventory.push(...looseGear(other));
+    for (const gem of other.gems) if (gem) player.gems.push(gem);
+    player.heroes = player.heroes.filter((h) => h.id !== other.id);
+  }
+  keeper.rarity = upgraded;
+  const sockets = GEM_SOCKETS_BY_RARITY[upgraded];
+  while (keeper.gems.length < sockets) keeper.gems.push(null);
+  if (keeper.gems.length > sockets) {
+    for (const gem of keeper.gems.slice(sockets)) if (gem) player.gems.push(gem);
+    keeper.gems = keeper.gems.slice(0, sockets);
+  }
+  return keeper;
+}
+
+function looseGear(hero: HeroInstance): Item[] {
+  const seen = new Set<string>();
+  const items: Item[] = [];
+  for (const item of Object.values(hero.equipment)) {
+    if (!item || seen.has(item.id)) continue;
+    seen.add(item.id);
+    items.push(item);
+  }
+  return items;
 }
 
 export function autoMergeAll(player: PlayerState, rng: Rng): { items: number; gems: number } {

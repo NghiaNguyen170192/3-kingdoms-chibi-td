@@ -5,6 +5,7 @@ import type {
   DotKind,
   EliteModifier,
   EnemyType,
+  ImbuedElement,
   StatusKind,
 } from "./types.js";
 
@@ -259,9 +260,20 @@ export function tickRegen(enemy: CombatEnemy, dt: number): void {
 }
 
 function dotType(kind: DotKind): DamageType {
-  if (kind === "ignite" || kind === "burn") return "fire";
+  return dotElement(kind);
+}
+
+export const IMBUED_ELEMENTS: ImbuedElement[] = ["lightning", "cold", "fire", "toxic", "bleed"];
+
+/** Imbued gems currently adding damage on this hero. */
+export function imbuedElements(stats: CombatStats): ImbuedElement[] {
+  return IMBUED_ELEMENTS.filter((element) => stats.added[element] > 0);
+}
+
+export function dotElement(kind: DotKind): ImbuedElement {
   if (kind === "poison") return "toxic";
-  return "bleed";
+  if (kind === "bleed") return "bleed";
+  return "fire";
 }
 
 export function blankResist(partial: Partial<Record<DamageType, number>>): Record<DamageType, number> {

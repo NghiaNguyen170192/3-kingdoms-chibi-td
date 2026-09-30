@@ -72,7 +72,7 @@ function cardHtml(hero: HeroInstance, selected: boolean, deployed: boolean): str
     <div class="roster-card ${selected ? "selected" : ""} ${deployed ? "deployed" : ""} type-${escapeHtml(def.archetype)}">
       <button type="button" class="pick" data-select="${hero.id}">
         <strong>${escapeHtml(def.name)}</strong>
-        <span>${escapeHtml(def.archetype)} · ${escapeHtml(def.rarity)}</span>
+        <span>${escapeHtml(def.archetype)} · ${escapeHtml(hero.rarity)}</span>
         <span>DPS ${dps}${deployed ? " · on map" : ""}</span>
       </button>
       <button type="button" class="fav" data-fav="${hero.id}" title="Favorite">${star}</button>

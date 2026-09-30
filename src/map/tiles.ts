@@ -23,6 +23,9 @@ export interface MapTile {
   placeable: boolean;
   slotId?: string;
   color: number;
+  /** Cell on the Gentle Forest sheet (`gentle forest v01.png`, 16px). */
+  sheetCol: number;
+  sheetRow: number;
 }
 
 /** Chebyshev tile distance — adjacent including diagonals is 1. */
@@ -68,22 +71,27 @@ export function generateTiles(map: MapDef = MVP_MAP): MapTile[][] {
         kind: "grass",
         placeable: false,
         color: (col + row) % 2 === 0 ? GRASS_A : GRASS_B,
+        sheetCol: (col + row) % 2 === 0 ? 1 : 2,
+        sheetRow: 5,
       });
     }
     grid.push(line);
   }
 
+  const center = new Set<string>();
   for (const route of map.routes) {
     for (let i = 1; i < route.waypoints.length; i++) {
       const a = worldToTile(route.waypoints[i - 1]!.x, route.waypoints[i - 1]!.y);
       const b = worldToTile(route.waypoints[i]!.x, route.waypoints[i]!.y);
-      for (const [col, row] of bresenham(a.col, a.row, b.col, b.row)) {
-        const tile = getTile(grid, col, row);
-        if (!tile) continue;
-        tile.kind = "route";
-        tile.color = ROUTE_COLOR;
-      }
+      for (const [col, row] of bresenham(a.col, a.row, b.col, b.row)) center.add(`${col},${row}`);
     }
+  }
+  for (const key of center) {
+    const [col, row] = key.split(",").map(Number) as [number, number];
+    const tile = getTile(grid, col, row);
+    if (!tile) continue;
+    tile.kind = "route";
+    tile.color = ROUTE_COLOR;
   }
 
   const dest = map.routes[0]?.waypoints.at(-1);
@@ -96,8 +104,18 @@ export function generateTiles(map: MapDef = MVP_MAP): MapTile[][] {
     }
   }
 
+  paintRoad(grid);
   markPlaceableSides(grid);
   return grid;
+}
+
+/** Solid dirt on the walk line only. Tiles beside the route stay grass, including placeable ones. */
+function paintRoad(grid: MapTile[][]): void {
+  for (const tile of grid.flat()) {
+    if (tile.kind !== "route" && tile.kind !== "castle") continue;
+    tile.sheetCol = 2;
+    tile.sheetRow = 1;
+  }
 }
 
 /** Grass beside the road: up to 3 tiles on each cardinal side of every route tile. */

@@ -60,7 +60,7 @@ function showRoster(player: PlayerState, args: string[] = []): void {
       console.log(`    gem ${gi + 1}    ${gem ? formatGem(gem) : "(empty)"}`);
     });
   });
-  console.log(`Gold ${player.gold} | Inventory ${player.inventory.length} | Gems ${player.gems.length}`);
+  console.log(`Gold ${player.gold} | Energy ${player.energy} | Inventory ${player.inventory.length} | Gems ${player.gems.length}`);
 }
 
 function showInventory(player: PlayerState): void {
@@ -79,7 +79,7 @@ function help(): void {
     "Combat, loot, equipment, and gems. No map/sprite/UI layer yet.",
     "",
     "Commands:",
-    "  fight [seed]     run Hulao Pass (10 waves + boss)",
+    "  fight [seed]     run Hulao Pass (20 waves + boss)",
     "  roster [text] [--type=speed|damager|mage] [--sort=dps-desc|dps-asc|rarity|favorite]",
     "  inv              inventory and gem stash",
     "  equip <hero#> <item#> <slot>",

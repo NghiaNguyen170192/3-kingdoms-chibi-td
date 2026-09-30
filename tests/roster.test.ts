@@ -40,10 +40,11 @@ describe("roster", () => {
     expect(sorted[0]!.defId).toBe("guo-jia");
   });
 
-  it("sorts by rarity with mythic first", () => {
+  it("starts the testing roster at mythic with six sockets", () => {
+    expect(HERO_DEFS.every((hero) => hero.rarity === "mythic" && hero.gemSockets === 6)).toBe(true);
     resetIds();
     const heroes = HERO_DEFS.map((h) => createHero(h.id));
     const sorted = queryRoster(heroes, { sort: "rarity" });
-    expect(sorted[0]!.defId).toBe("lu-bu");
+    expect(sorted.every((hero) => hero.rarity === "mythic")).toBe(true);
   });
 });
