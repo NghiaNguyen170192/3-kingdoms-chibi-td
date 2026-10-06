@@ -12,7 +12,8 @@ export function bindRosterPanel(
   isDeployed: (heroId: string) => boolean,
 ): { refresh: () => void } {
   root.innerHTML = `
-    <h2>Roster</h2>
+    <h2>Heroes</h2>
+    <p class="muted">Not on the map. Select one, then click a green tile.</p>
     <input id="roster-search" type="search" placeholder="Search name, type, rarity" />
     <div class="roster-filters">
       <select id="roster-type">
@@ -43,9 +44,10 @@ export function bindRosterPanel(
       sort: sortEl.value as RosterSort,
     };
     const selected = getSelected();
-    listEl.innerHTML = queryRoster(player.heroes, query)
-      .map((hero) => cardHtml(hero, selected === hero.id, isDeployed(hero.id)))
-      .join("");
+    const waiting = queryRoster(player.heroes, query).filter((hero) => !isDeployed(hero.id));
+    listEl.innerHTML = waiting.length
+      ? waiting.map((hero) => cardHtml(hero, selected === hero.id, false)).join("")
+      : `<p class="muted">Every hero is on the map.</p>`;
     listEl.querySelectorAll<HTMLButtonElement>("[data-select]").forEach((btn) => {
       btn.addEventListener("click", () => onSelect(btn.dataset.select!));
     });

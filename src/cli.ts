@@ -1,6 +1,7 @@
 import * as readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
-import { EQUIPMENT_MERGE, GEM_MERGE, MVP_MAP, heroDef } from "./data.js";
+import { EQUIPMENT_MERGE, GEM_MERGE, heroDef } from "./data.js";
+import { playMap } from "./map/tiles.js";
 import {
   autoEquipBest,
   autoMergeAll,
@@ -120,7 +121,7 @@ async function interactive(): Promise<void> {
         continue;
       }
       if (cmd === "slots") {
-        for (const s of MVP_MAP.slots) console.log(`  ${s.id}  (${s.x},${s.y})`);
+        for (const s of playMap().slots) console.log(`  ${s.id}  (${s.x},${s.y})`);
         continue;
       }
       if (cmd === "fight") {

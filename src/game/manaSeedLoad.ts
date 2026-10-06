@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 import type Phaser from "phaser";
-import { FRAME, requiredSheets } from "./manaSeed.js";
+import { FRAME, requiredSheets, sheetFilename, type Layer, type Page } from "./manaSeed.js";
 
 const sheetUrls = {
   ...import.meta.glob("../../assets/characters/p1/**/*.png", {
@@ -24,6 +24,12 @@ const urlByFile = new Map<string, string>();
 for (const [path, url] of Object.entries(sheetUrls)) {
   const file = path.split("/").pop() ?? path;
   urlByFile.set(file, url);
+}
+
+export function characterSheetUrl(page: Page, layer: Layer, code: string): string {
+  const url = urlByFile.get(sheetFilename(page, layer, code));
+  if (!url) throw new Error(`Missing character sheet ${sheetFilename(page, layer, code)}`);
+  return url;
 }
 
 export function characterTextureKeys(): string[] {

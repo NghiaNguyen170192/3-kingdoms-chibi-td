@@ -53,9 +53,9 @@ describe("mana seed looks", () => {
     expect(animFrames("slash", 0).map((f) => f.ms)).toEqual([160, 65, 65, 200]);
     expect(animFrames("walk", 0).map((f) => f.col)).toEqual([0, 1, 2, 3, 4, 5]);
     expect(animFrames("walk", 0)[0]?.row).toBe(4);
-    expect(animFrames("walk", 1)[0]?.row).toBe(5);
+    expect(animFrames("walk", 1)[0]?.row).toBe(7);
     expect(animFrames("walk", 2)[0]?.row).toBe(6);
-    expect(animFrames("walk", 3)[0]?.row).toBe(7);
+    expect(animFrames("walk", 3)[0]?.row).toBe(5);
     expect(animFrames("run", 2).map((f) => f.col)).toEqual([0, 1, 6, 3, 4, 7]);
     const tints = ["troop", "scout", "brute", "elite", "boss"].map((type) => enemyLook(type).tint);
     expect(new Set(tints).size).toBe(5);

@@ -1,12 +1,12 @@
 import Phaser from "phaser";
 import { BattleRuntime } from "../battle.js";
-import { ENERGY, MVP_MAP, heroDef } from "../data.js";
+import { ENERGY, MAPS, heroDef, mapById } from "../data.js";
 import { collectLoot, createNewPlayer, grantClearReward } from "../player.js";
 import { Rng } from "../rng.js";
 import { renderInventory } from "./inventoryPanel.js";
 import { EnemyActor } from "./enemyActor.js";
 import { HeroActor } from "./heroActor.js";
-import { renderHeroSheet } from "./heroSheet.js";
+import { renderHeroSheet, renderSharedBag } from "./heroSheet.js";
 import { queueImbuedEffects, registerImbuedEffects, spawnImbuedEffect } from "./imbuedEffect.js";
 import { FOREST_COLS, FOREST_KEY, queueForestSheet } from "./forestSheet.js";
 import { characterTextureKeys, queueCharacterSheets } from "./manaSeedLoad.js";
@@ -16,6 +16,7 @@ import {
   MAP_COLS,
   MAP_PAD,
   MAP_ROWS,
+  UI_ROWS,
   SLOT_BORDER,
   TILE_PX,
   generateTiles,
@@ -48,6 +49,9 @@ export class PlayScene extends Phaser.Scene {
   private lastHeroTap = { id: "", time: 0 };
   private inventoryEl!: HTMLElement;
   private inventoryBody!: HTMLElement;
+  private bagEl!: HTMLElement;
+  private dockMode: "heroes" | "bag" | "friend" = "heroes";
+  private dockButtons = new Map<string, Phaser.GameObjects.Text>();
 
   constructor() {
     super("play");
@@ -79,10 +83,10 @@ export class PlayScene extends Phaser.Scene {
     this.textures.get(FOREST_KEY).setFilter(Phaser.Textures.FilterMode.NEAREST);
     registerImbuedEffects(this);
     this.player = createNewPlayer();
-    this.map = playMap();
+    this.map = playMap(selectedMap());
     this.tiles = generateTiles(this.map);
     this.drawMap();
-    this.drawHud();
+    this.drawDock();
     this.bindDom();
     this.refreshHeroViews();
     this.refreshSheet();
@@ -136,8 +140,29 @@ export class PlayScene extends Phaser.Scene {
     this.sheetEl = document.querySelector("#hero-sheet")!;
     this.autoWaveEl.addEventListener("change", () => {
       this.runtime?.setAutoNext(this.autoWaveEl.checked);
+      this.paintDock();
       this.refreshHud();
     });
+    const mapPick = document.querySelector<HTMLSelectElement>("#map-pick");
+    if (mapPick) {
+      mapPick.replaceChildren(
+        ...MAPS.map((map) => {
+          const option = document.createElement("option");
+          option.value = map.id;
+          option.textContent = map.name;
+          option.selected = map.id === this.map.id;
+          return option;
+        }),
+      );
+      mapPick.addEventListener("change", () => {
+        const params = new URLSearchParams(window.location.search);
+        params.set("map", mapPick.value);
+        window.history.replaceState(null, "", `${window.location.pathname}?${params.toString()}`);
+        this.scene.restart();
+      });
+    }
+    this.bagEl = document.querySelector<HTMLElement>("#shared-bag")!;
+    this.showDock();
     this.nextWaveEl.addEventListener("click", () => this.continueWave());
     this.inventoryEl = document.querySelector("#inventory")!;
     this.inventoryBody = document.querySelector("#inventory-body")!;
@@ -176,11 +201,13 @@ export class PlayScene extends Phaser.Scene {
         const x = MAP_PAD + tile.col * TILE_PX;
         const y = MAP_PAD + tile.row * TILE_PX;
         const frame = tile.sheetRow * FOREST_COLS + tile.sheetCol;
-        this.add
+        const image = this.add
           .image(x, y, FOREST_KEY, frame)
           .setOrigin(0, 0)
           .setDisplaySize(TILE_PX, TILE_PX)
           .setDepth(0);
+        if (tile.kind === "grass" && this.map.ground === "snow") image.setTint(0xc5d4e8);
+        if (tile.kind === "grass" && this.map.ground === "sand") image.setTint(0xe4c888);
         g.lineStyle(1, 0x163016, 0.35);
         g.strokeRect(x, y, TILE_PX, TILE_PX);
         if (tile.placeable) {
@@ -191,51 +218,144 @@ export class PlayScene extends Phaser.Scene {
     }
 
     this.add
-      .text(MAP_PAD, 4, `${MVP_MAP.name}    dirt = route    green border = place along the path`, {
+      .text(MAP_PAD, 4, `${this.map.name}    dirt = route    green border = place along the path`, {
         fontFamily: "Arial",
         fontSize: "14px",
         color: "#e8e2c8",
       })
       .setOrigin(0, 0);
 
-    const dest = MVP_MAP.routes[0]!.waypoints.at(-1)!;
-    const castle = worldToScreen(dest.x, dest.y);
-    this.add
-      .text(castle.x, castle.y, "CASTLE", {
-        fontFamily: "Arial",
-        fontSize: "11px",
-        color: "#ffe6e6",
-        fontStyle: "bold",
-      })
-      .setOrigin(0.5)
-      .setDepth(2);
+    const seen = new Set<string>();
+    for (const path of this.map.paths) {
+      if (seen.has(path.destinationId)) continue;
+      seen.add(path.destinationId);
+      const dest = path.waypoints.at(-1)!;
+      const castle = worldToScreen(dest.x, dest.y);
+      this.add
+        .text(castle.x, castle.y, "CASTLE", {
+          fontFamily: "Arial",
+          fontSize: "11px",
+          color: "#ffe6e6",
+          fontStyle: "bold",
+        })
+        .setOrigin(0.5)
+        .setDepth(2);
+    }
     g.setDepth(1);
   }
 
-  private drawHud(): void {
-    const y = MAP_PAD + MAP_ROWS * TILE_PX + 8;
-    this.hud = this.add.text(MAP_PAD, y, "", {
+  /** Two grass rows under the battlefield. Not placeable. */
+  private drawDock(): void {
+    const top = MAP_PAD + MAP_ROWS * TILE_PX;
+    for (let row = 0; row < UI_ROWS; row++) {
+      for (let col = 0; col < MAP_COLS; col++) {
+        const frame = 5 * FOREST_COLS + ((col + row) % 2 === 0 ? 1 : 2);
+        this.add
+          .image(MAP_PAD + col * TILE_PX, top + row * TILE_PX, FOREST_KEY, frame)
+          .setOrigin(0, 0)
+          .setDisplaySize(TILE_PX, TILE_PX)
+          .setTint(0x4e5a40)
+          .setDepth(3);
+      }
+    }
+    this.hud = this.add.text(MAP_PAD + 6, top + 2, "", {
       fontFamily: "Arial",
-      fontSize: "15px",
+      fontSize: "12px",
       color: "#f4ecd2",
-    });
-    this.hint = this.add.text(MAP_PAD, y + 44, "", {
+    }).setDepth(6);
+    this.hint = this.add.text(MAP_PAD + 6, top + 16, "", {
       fontFamily: "Arial",
-      fontSize: "14px",
-      color: "#c8d6a3",
+      fontSize: "11px",
+      color: "#d5e2b8",
+    }).setDepth(6);
+
+    const buttons: Array<{ key: string; icon: string; label: string }> = [
+      { key: "heroes", icon: "⚔", label: "HEROES" },
+      { key: "bag", icon: "🎒", label: "BAG" },
+      { key: "friend", icon: "👤", label: "FRIEND" },
+      { key: "auto", icon: "↻", label: "AUTO" },
+      { key: "next", icon: "»", label: "NEXT" },
+    ];
+    const buttonY = top + 44;
+    const span = MAP_COLS * TILE_PX - 108;
+    buttons.forEach((button, index) => {
+      const x = MAP_PAD + 8 + (index * span) / buttons.length;
+      const label = this.add
+        .text(x, buttonY, `${button.icon}  ${button.label}`, {
+          fontFamily: "Arial",
+          fontSize: "13px",
+          color: "#f0d48a",
+          backgroundColor: "#1a120c",
+          padding: { x: 8, y: 6 },
+        })
+        .setDepth(6)
+        .setInteractive({ useHandCursor: true });
+      label.on("pointerdown", () => this.onDock(button.key));
+      this.dockButtons.set(button.key, label);
     });
     this.fightBtn = this.add
-      .text(MAP_PAD + MAP_COLS * TILE_PX - 8, y, "  FIGHT  ", {
+      .text(MAP_PAD + MAP_COLS * TILE_PX - 8, buttonY, " FIGHT ", {
         fontFamily: "Arial",
-        fontSize: "20px",
+        fontSize: "16px",
         color: "#14200f",
         backgroundColor: "#7CFF7C",
-        padding: { x: 14, y: 6 },
+        padding: { x: 10, y: 6 },
       })
       .setOrigin(1, 0)
+      .setDepth(6)
       .setInteractive({ useHandCursor: true })
       .on("pointerdown", () => this.startFight());
     this.refreshHud();
+  }
+
+  private onDock(key: string): void {
+    if (key === "auto") {
+      this.autoWaveEl.checked = !this.autoWaveEl.checked;
+      this.autoWaveEl.dispatchEvent(new Event("change"));
+      this.paintDock();
+      return;
+    }
+    if (key === "next") {
+      this.continueWave();
+      this.paintDock();
+      return;
+    }
+    if (key === "heroes" || key === "bag" || key === "friend") {
+      this.dockMode = key;
+      this.showDock();
+    }
+  }
+
+  private showDock(): void {
+    const roster = document.querySelector<HTMLElement>("#roster");
+    const friend = document.querySelector<HTMLElement>("#friend-dock");
+    if (roster) roster.hidden = this.dockMode !== "heroes";
+    if (this.bagEl) this.bagEl.hidden = this.dockMode !== "bag";
+    if (friend) friend.hidden = this.dockMode !== "friend";
+    if (this.dockMode === "bag") this.refreshBag();
+    this.paintDock();
+  }
+
+  private refreshBag(): void {
+    if (!this.bagEl) return;
+    renderSharedBag(this.bagEl, this.player, this.selectedHeroId, () => {
+      this.runtime?.refreshHeroStats();
+      this.refreshHeroViews();
+      this.refreshSheet();
+      this.refreshBag();
+      this.rosterRefresh?.();
+      this.refreshHud();
+    });
+  }
+
+  private paintDock(): void {
+    for (const [key, button] of this.dockButtons) {
+      const on = key === this.dockMode || (key === "auto" && this.autoWaveEl?.checked);
+      button.setColor(on ? "#14200f" : "#f0d48a");
+      button.setBackgroundColor(on ? "#e6c36a" : "#1a120c");
+    }
+    const waiting = Boolean(this.runtime?.waitingForNextWave && !this.runtime.finished);
+    this.dockButtons.get("next")?.setAlpha(waiting ? 1 : 0.45);
   }
 
   private onClick(pointer: Phaser.Input.Pointer): void {
@@ -285,7 +405,6 @@ export class PlayScene extends Phaser.Scene {
   private refreshHeroViews(): void {
     for (const actor of this.heroActors.values()) actor.destroy();
     this.heroActors.clear();
-    const armed = Boolean(this.runtime);
     for (const [heroId, slotId] of this.placements) {
       const hero = this.player.heroes.find((h) => h.id === heroId);
       const slot = this.map.slots.find((s) => s.id === slotId);
@@ -300,7 +419,7 @@ export class PlayScene extends Phaser.Scene {
         heroId === this.selectedHeroId,
         look.weaponTint ?? 0xffffff,
       );
-      if (armed) actor.setCombat(true);
+      actor.setCombat(true);
       this.heroActors.set(heroId, actor);
     }
   }
@@ -343,12 +462,25 @@ export class PlayScene extends Phaser.Scene {
   }
 
   private refreshSheet(): void {
-    renderHeroSheet(this.sheetEl, this.player, this.selectedHeroId, () => {
+    const heroId = this.selectedHeroId;
+    renderHeroSheet(this.sheetEl, this.player, heroId, () => {
       this.runtime?.refreshHeroStats();
       this.refreshHeroViews();
       this.refreshSheet();
+      if (this.dockMode === "bag") this.refreshBag();
       this.rosterRefresh?.();
       this.refreshHud();
+    }, {
+      deployed: Boolean(heroId && this.placements.has(heroId) && this.canEdit()),
+      onRecall: () => {
+        if (!heroId || !this.canEdit()) return;
+        this.placements.delete(heroId);
+        this.runtime?.removeHero(heroId);
+        this.refreshHeroViews();
+        this.refreshSheet();
+        this.rosterRefresh?.();
+        this.refreshHud();
+      },
     });
   }
 
@@ -468,7 +600,8 @@ export class PlayScene extends Phaser.Scene {
       this.hud.setText(
         `Place heroes  |  ${energy}  |  selected ${name}  |  deployed ${this.placements.size}  |  castle 20`,
       );
-      this.hint.setText("Pick a hero in the roster, then click a green-border tile. Each wave costs 1 energy.");
+      this.hint.setText("Pick a hero, then click a green tile. Each wave costs 1 energy.");
+      this.paintDock();
       return;
     }
     const r = this.runtime;
@@ -486,6 +619,7 @@ export class PlayScene extends Phaser.Scene {
           : "Hitbox: Speed 1, Damager 2, Mage 3. Boss leak fails the run. Trash -1, elite -5.",
     );
     this.nextWaveEl.classList.toggle("visible", Boolean(r.waitingForNextWave));
+    this.paintDock();
   }
 
   private showResult(): void {
@@ -533,6 +667,12 @@ export class PlayScene extends Phaser.Scene {
       this.rosterRefresh?.();
     });
   }
+}
+
+function selectedMap() {
+  const id = new URLSearchParams(window.location.search).get("map");
+  if (!id) return MAPS[0]!;
+  return mapById(id);
 }
 
 function pickDemoSlots(tiles: MapTile[][]): string[] {

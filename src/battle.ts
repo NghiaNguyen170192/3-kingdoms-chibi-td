@@ -94,6 +94,31 @@ function traveled(enemy: CombatEnemy, map: MapDef): number {
   return d;
 }
 
+/**
+ * Gates take turns. When that gate's baked walks end at two or more castles,
+ * one destination is chosen at random and the stored waypoint list is used.
+ * No tile search happens here.
+ */
+export function choosePathIndex(map: MapDef, rng: Rng, spawnOrdinal: number): number {
+  const paths = map.paths;
+  if (!paths.length) return spawnOrdinal % map.routes.length;
+  const entryIds: string[] = [];
+  for (const path of paths) {
+    if (!entryIds.includes(path.entryId)) entryIds.push(path.entryId);
+  }
+  const entryId = entryIds[spawnOrdinal % entryIds.length]!;
+  const indexes = paths.map((_, index) => index).filter((index) => paths[index]!.entryId === entryId);
+  const dests: string[] = [];
+  for (const index of indexes) {
+    const dest = paths[index]!.destinationId;
+    if (!dests.includes(dest)) dests.push(dest);
+  }
+  if (dests.length < 2) return indexes[0]!;
+  const destId = rng.pick(dests);
+  const toDest = indexes.filter((index) => paths[index]!.destinationId === destId);
+  return toDest.length === 1 ? toDest[0]! : rng.pick(toDest);
+}
+
 function spawnEnemy(
   type: EnemyType,
   routeIndex: number,
@@ -205,6 +230,8 @@ export class BattleRuntime {
   autoNextWave: boolean;
 
   private readonly rng: Rng;
+  /** Path picks stay off the loot rng so a map with one castle does not change drops. */
+  private readonly pathRng: Rng;
   private readonly account?: PlayerState;
   private readonly recordAll: boolean;
   private itemFind = 0;
@@ -241,6 +268,7 @@ export class BattleRuntime {
   ) {
     this.map = options.map ?? playMap();
     this.rng = new Rng(options.seed ?? 1);
+    this.pathRng = new Rng((options.seed ?? 1) + 0x51ed);
     this.account = options.account;
     this.recordAll = options.recordAllEvents ?? false;
     this.autoNextWave = options.autoNextWave ?? true;
@@ -412,7 +440,7 @@ export class BattleRuntime {
       this.spawnWait -= TICK;
       if (this.spawnWait <= 0) {
         const next = this.pending.shift()!;
-        const enemy = spawnEnemy(next.type, this.enemies.length % map.routes.length, map, next.eliteMods);
+        const enemy = spawnEnemy(next.type, choosePathIndex(map, this.pathRng, this.enemies.length), map, next.eliteMods);
         this.enemies.push(enemy);
         emit({
           type: "spawn",

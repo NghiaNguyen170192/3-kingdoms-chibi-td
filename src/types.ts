@@ -199,6 +199,14 @@ export interface Route {
   waypoints: Vec2[];
 }
 
+/** One walk from a gate to a castle, baked when the map module loads. */
+export interface BakedPath {
+  id: string;
+  entryId: string;
+  destinationId: string;
+  waypoints: Vec2[];
+}
+
 export interface DeploySlot {
   id: string;
   x: number;
@@ -222,9 +230,17 @@ export interface MapDef {
   id: string;
   name: string;
   castleHp: number;
+  /** Same walks as `paths`, kept so movement can follow a waypoint list. */
   routes: Route[];
+  /**
+   * Every gate-to-castle walk on this road. Built once from the fixed road
+   * graph. A fight only picks an index; it does not search tiles.
+   */
+  paths: BakedPath[];
   slots: DeploySlot[];
   waves: WaveDef[];
+  /** Grass tint. The road stays dirt. */
+  ground?: "grass" | "snow" | "sand";
 }
 
 export interface LootDrop {

@@ -46,7 +46,7 @@ Row order is not the same on every page. Use the helpers in `manaSeed.ts`. Do no
 
 | Page | Use | Rows |
 |---|---|---|
-| `p1` | Unarmed stand; walk and run | Stand is rows 0–3. Walk and run are rows 4–7, in order down, left, right, up. `walkRow` |
+| `p1` | Unarmed stand; walk and run | Stand is rows 0–3. Walk and run are rows 4–7. Both are down, up, right, left. `sheetRow`, `walkRow` |
 | `pONE2` | Combat idle | Rows are down, up, right, left. `sheetRow` |
 | `pONE3` | Slash | Same row order as combat idle |
 

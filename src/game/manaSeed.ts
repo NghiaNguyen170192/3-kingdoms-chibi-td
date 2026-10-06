@@ -145,9 +145,9 @@ export function enemyLook(type: string): EnemyLook {
   return ENEMY_LOOKS[type] ?? DEFAULT_ENEMY;
 }
 
-/** Page 1 walk rows are down, left, right, up, starting at row 4. */
+/** Page 1 walk and run rows are down, up, right, left, starting at row 4. */
 export function walkRow(facing: Facing): number {
-  return 4 + facing;
+  return 4 + sheetRow(facing);
 }
 
 export function textureKey(page: Page, layer: Layer, code: string): string {

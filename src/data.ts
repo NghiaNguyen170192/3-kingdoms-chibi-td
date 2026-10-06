@@ -5,7 +5,6 @@ import type {
   GemFamily,
   HeroDef,
   ItemBase,
-  MapDef,
   Modifier,
   Rarity,
   StatId,
@@ -412,96 +411,7 @@ export const GEM_NAMES: Record<GemFamily, string> = {
 
 export const GEM_FAMILIES = Object.keys(GEM_NAMES) as GemFamily[];
 
-export const MVP_MAP: MapDef = {
-  id: "hulao-pass",
-  name: "Hulao Pass",
-  castleHp: 20,
-  routes: [
-    {
-      id: "north",
-      waypoints: [
-        { x: 0, y: 20 },
-        { x: 80, y: 20 },
-        { x: 80, y: 70 },
-        { x: 220, y: 70 },
-      ],
-    },
-    {
-      id: "south",
-      waypoints: [
-        { x: 0, y: 120 },
-        { x: 80, y: 120 },
-        { x: 80, y: 70 },
-        { x: 220, y: 70 },
-      ],
-    },
-  ],
-  slots: [
-    { id: "n1", x: 50, y: 40 },
-    { id: "n2", x: 110, y: 40 },
-    { id: "c1", x: 150, y: 70 },
-    { id: "s1", x: 50, y: 100 },
-    { id: "s2", x: 110, y: 100 },
-    { id: "gate", x: 190, y: 70 },
-  ],
-  waves: [
-    { wave: 1, delay: 0.5, spawnInterval: 0.7, packs: [{ type: "troop", count: 8 }] },
-    { wave: 2, delay: 2, spawnInterval: 0.65, packs: [{ type: "troop", count: 10 }] },
-    { wave: 3, delay: 2, spawnInterval: 0.6, packs: [{ type: "troop", count: 8 }, { type: "scout", count: 4 }] },
-    { wave: 4, delay: 2.2, spawnInterval: 0.55, packs: [{ type: "troop", count: 8 }, { type: "scout", count: 6 }] },
-    { wave: 5, delay: 2.2, spawnInterval: 0.55, packs: [{ type: "troop", count: 8 }, { type: "brute", count: 2 }] },
-    { wave: 6, delay: 2.4, spawnInterval: 0.5, packs: [{ type: "troop", count: 8 }, { type: "scout", count: 4 }, { type: "brute", count: 3 }] },
-    { wave: 7, delay: 2.4, spawnInterval: 0.5, packs: [{ type: "troop", count: 10 }, { type: "brute", count: 4 }] },
-    {
-      wave: 8,
-      delay: 2.6,
-      spawnInterval: 0.7,
-      packs: [
-        { type: "elite", count: 4, eliteModifiers: ["armoured"] },
-        { type: "scout", count: 6 },
-      ],
-    },
-    {
-      wave: 9,
-      delay: 2.6,
-      spawnInterval: 0.5,
-      packs: [
-        { type: "troop", count: 8 },
-        { type: "brute", count: 3 },
-        { type: "elite", count: 3, eliteModifiers: ["fast", "regenerating"] },
-      ],
-    },
-    { wave: 10, delay: 2.4, spawnInterval: 0.48, packs: [{ type: "troop", count: 12 }, { type: "scout", count: 6 }] },
-    { wave: 11, delay: 2.4, spawnInterval: 0.48, packs: [{ type: "brute", count: 4 }, { type: "scout", count: 6 }] },
-    { wave: 12, delay: 2.5, spawnInterval: 0.46, packs: [{ type: "troop", count: 10 }, { type: "elite", count: 2, eliteModifiers: ["fast"] }] },
-    { wave: 13, delay: 2.5, spawnInterval: 0.46, packs: [{ type: "brute", count: 3 }, { type: "elite", count: 3, eliteModifiers: ["armoured"] }] },
-    { wave: 14, delay: 2.5, spawnInterval: 0.45, packs: [{ type: "scout", count: 8 }, { type: "brute", count: 4 }] },
-    { wave: 15, delay: 2.6, spawnInterval: 0.5, packs: [{ type: "elite", count: 4, eliteModifiers: ["regenerating"] }, { type: "troop", count: 8 }] },
-    { wave: 16, delay: 2.6, spawnInterval: 0.45, packs: [{ type: "brute", count: 5 }, { type: "elite", count: 2, eliteModifiers: ["fireResistant"] }] },
-    { wave: 17, delay: 2.6, spawnInterval: 0.44, packs: [{ type: "scout", count: 8 }, { type: "elite", count: 3, eliteModifiers: ["fast", "armoured"] }] },
-    { wave: 18, delay: 2.8, spawnInterval: 0.44, packs: [{ type: "brute", count: 4 }, { type: "elite", count: 4, eliteModifiers: ["criticalResistant"] }] },
-    {
-      wave: 19,
-      delay: 2.8,
-      spawnInterval: 0.42,
-      packs: [
-        { type: "troop", count: 12 },
-        { type: "brute", count: 4 },
-        { type: "elite", count: 3, eliteModifiers: ["regenerating", "armoured"] },
-      ],
-    },
-    {
-      wave: 20,
-      delay: 3,
-      spawnInterval: 0.8,
-      packs: [
-        { type: "troop", count: 6 },
-        { type: "elite", count: 2, eliteModifiers: ["armoured", "criticalResistant"] },
-        { type: "boss", count: 1 },
-      ],
-    },
-  ],
-};
+export { MAPS, MVP_MAP, mapById } from "./map/maps.js";
 
 export function heroDef(id: string): HeroDef {
   const found = HERO_DEFS.find((h) => h.id === id);

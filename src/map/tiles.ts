@@ -6,6 +6,8 @@ export const TILE_PX = 40;
 export const MAP_PAD = 24;
 export const MAP_COLS = 23;
 export const MAP_ROWS = 15;
+/** Bottom band for the dock. These cells are not part of the battlefield. */
+export const UI_ROWS = 2;
 
 /** Every path tile uses this fill so both routes read as one road. */
 export const ROUTE_COLOR = 0xc9a66b;
@@ -94,8 +96,11 @@ export function generateTiles(map: MapDef = MVP_MAP): MapTile[][] {
     tile.color = ROUTE_COLOR;
   }
 
-  const dest = map.routes[0]?.waypoints.at(-1);
-  if (dest) {
+  const ends = map.paths?.length
+    ? map.paths.map((path) => path.waypoints.at(-1))
+    : map.routes.map((route) => route.waypoints.at(-1));
+  for (const dest of ends) {
+    if (!dest) continue;
     const { col, row } = worldToTile(dest.x, dest.y);
     const tile = getTile(grid, col, row);
     if (tile) {
