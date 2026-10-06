@@ -7,7 +7,7 @@ export const MAP_PAD = 24;
 export const MAP_COLS = 23;
 export const MAP_ROWS = 15;
 /** Bottom band for the dock. These cells are not part of the battlefield. */
-export const UI_ROWS = 2;
+export const UI_ROWS = 3;
 
 /** Every path tile uses this fill so both routes read as one road. */
 export const ROUTE_COLOR = 0xc9a66b;

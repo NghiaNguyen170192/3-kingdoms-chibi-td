@@ -1,7 +1,7 @@
 import { heroDef } from "../data.js";
 import { socket, suggestSlot, unequip, unsocket, wear } from "../player.js";
 import { computeHeroStats, formatItem } from "../stats.js";
-import type { GemFamily, HeroInstance, PlayerState, WornSlot } from "../types.js";
+import type { EquipSlot, GemFamily, HeroInstance, Item, PlayerState, Rarity, WornSlot } from "../types.js";
 import { armedLook } from "./manaSeed.js";
 import { mountHeroPortrait } from "./heroPortrait.js";
 
@@ -45,7 +45,7 @@ export function renderHeroSheet(
   stops.get(root)?.();
   stops.delete(root);
   if (!heroId) {
-    root.innerHTML = `<p class="muted">Select a hero to see stats, gear, and gems.</p>`;
+    root.innerHTML = "";
     return;
   }
   const hero = player.heroes.find((h) => h.id === heroId);
@@ -166,6 +166,26 @@ function gemSlots(hero: HeroInstance): string {
     .join("");
 }
 
+const SLOT_MARK: Record<EquipSlot, string> = {
+  helmet: "Helm",
+  body: "Body",
+  gloves: "Glove",
+  belt: "Belt",
+  boots: "Boot",
+  ring: "Ring",
+  amulet: "Amu",
+  weapon: "Wpn",
+};
+
+const RARITY_BORDER: Record<Rarity, string> = {
+  normal: "#c8c8c8",
+  magic: "#4aa3ff",
+  rare: "#ffd15a",
+  unique: "#ff9a3c",
+  legendary: "#e24b4b",
+  mythic: "#b56bff",
+};
+
 /** Account stash. One copy of an item can be worn by only one hero. */
 export function renderSharedBag(
   root: HTMLElement,
@@ -177,26 +197,20 @@ export function renderSharedBag(
   const worn = new Set(
     player.heroes.flatMap((entry) => Object.values(entry.equipment).filter(Boolean).map((item) => item!.id)),
   );
-  const items = player.inventory
-    .map((item) => {
-      const taken = worn.has(item.id) ? " · worn" : "";
-      return `<button type="button" class="bag-row" data-equip="${item.id}">${escapeHtml(formatItem(item))}${taken}</button>`;
+  const items = player.inventory.map((item) => itemFace(item, worn.has(item.id))).join("");
+  const gems = player.gems
+    .map((gem) => {
+      const tint = GEM_TINT[gem.family];
+      return `<button type="button" class="item-face" data-socket="${gem.id}" title="${escapeHtml(gem.name)} Lv.${gem.level}" style="border-color:${tint}"><span>Gem</span><strong>Lv${gem.level}</strong></button>`;
     })
     .join("");
-  const gems = player.gems
-    .map(
-      (gem) =>
-        `<button type="button" class="bag-row" data-socket="${gem.id}"><i style="background:${GEM_TINT[gem.family]}"></i>${escapeHtml(gem.name)} Lv.${gem.level}</button>`,
-    )
-    .join("");
   const who = hero ? heroDef(hero.defId).name : "no hero selected";
+  root.title = `Shared bag. Gold ${player.gold}. Equip onto ${who}.`;
   root.innerHTML = `
-    <h2>Bag</h2>
-    <p class="muted">Shared by every hero. Equip onto ${escapeHtml(who)}. Gold ${player.gold}.</p>
-    <h3>Equipment</h3>
-    ${items || `<p class="muted">No spare items.</p>`}
-    <h3>Gems</h3>
-    ${gems || `<p class="muted">No loose gems.</p>`}
+    <div class="bag-list">
+      ${items}${gems || ""}
+      ${items || gems ? "" : `<p class="muted">Empty</p>`}
+    </div>
     <p class="warn bag-warn" hidden></p>
   `;
   const warn = root.querySelector<HTMLElement>(".bag-warn");
@@ -237,6 +251,12 @@ export function renderSharedBag(
       onChange();
     });
   });
+}
+
+function itemFace(item: Item, worn: boolean): string {
+  const mark = SLOT_MARK[item.slot];
+  const label = item.name.length > 8 ? item.name.slice(0, 8) : item.name;
+  return `<button type="button" class="item-face${worn ? " worn" : ""}" data-equip="${item.id}" title="${escapeHtml(formatItem(item))}${worn ? " · worn" : ""}" style="border-color:${RARITY_BORDER[item.rarity]}"><span>${mark}</span><strong>${escapeHtml(label)}</strong></button>`;
 }
 
 function escapeHtml(text: string): string {

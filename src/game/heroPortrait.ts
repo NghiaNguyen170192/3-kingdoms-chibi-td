@@ -20,7 +20,7 @@ function loadImage(url: string): Promise<HTMLImageElement> {
 }
 
 /** Combat idle, facing down, on a canvas. Returns a stop function for the next render. */
-export function mountHeroPortrait(canvas: HTMLCanvasElement, look: HeroLook): () => void {
+export function mountHeroPortrait(canvas: HTMLCanvasElement, look: HeroLook, portraitScale = 2): () => void {
   const ctx = canvas.getContext("2d");
   if (!ctx) return () => {};
   ctx.imageSmoothingEnabled = false;
@@ -37,11 +37,10 @@ export function mountHeroPortrait(canvas: HTMLCanvasElement, look: HeroLook): ()
     const cell = frames[frame]!;
     const sx = cell.col * FRAME;
     const sy = cell.row * FRAME;
-    const scale = 2;
-    const dw = FRAME * scale;
-    const dh = FRAME * scale;
+    const dw = Math.round(FRAME * portraitScale);
+    const dh = Math.round(FRAME * portraitScale);
     const dx = Math.round((canvas.width - dw) / 2);
-    const dy = 8;
+    const dy = Math.round((canvas.height - dh) / 2);
     const weapon = layers.find((layer) => layer.layer === "6tla");
     const front = weaponInFront("pONE2", cell.col, cell.row);
     const order = front

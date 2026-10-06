@@ -12,10 +12,13 @@ const game = new Phaser.Game({
   height,
   backgroundColor: "#141910",
   pixelArt: true,
+  antialias: false,
+  roundPixels: true,
   scene: [PlayScene],
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
+    autoRound: true,
   },
 });
 

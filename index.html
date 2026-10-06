@@ -8,117 +8,291 @@
       html,
       body {
         margin: 0;
-        min-height: 100%;
+        height: 100%;
+        overflow: hidden;
         background: #0e120c;
         color: #f4ecd2;
         font-family: Arial, sans-serif;
       }
       #wrap {
-        min-height: 100vh;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        padding: 12px 16px 24px;
-        box-sizing: border-box;
+        height: 100%;
+        margin: 0;
+        padding: 0;
       }
-      h1 {
-        margin: 8px 0 4px;
-        font-size: 20px;
-      }
+      h1,
       .lead {
-        margin: 0 0 10px;
-        color: #c8d6a3;
-        font-size: 13px;
+        display: none;
       }
       #play {
-        display: flex;
-        gap: 16px;
-        align-items: flex-start;
-        max-width: 1400px;
+        position: relative;
+        width: 100%;
+        height: 100%;
+        margin: 0;
       }
       #game {
-        box-shadow: 0 12px 40px #0008;
+        width: 100%;
+        height: 100%;
+      }
+      #game canvas {
+        image-rendering: pixelated;
+        image-rendering: crisp-edges;
       }
       #sidebar {
-        width: 420px;
-        background: #1a2116;
+        position: static;
+        width: 0;
+        height: 0;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        overflow: visible;
+      }
+      #map-pick {
+        position: fixed;
+        top: 4px;
+        right: 4px;
+        z-index: 4;
+        width: auto;
+        margin: 0;
+        padding: 2px 4px;
+        background: #11170f;
+        color: #f4ecd2;
         border: 1px solid #3d4a30;
-        padding: 12px;
+        font-size: 12px;
+      }
+      #map-legend,
+      #dock-bar,
+      #roster,
+      #shared-bag,
+      #friend-dock,
+      #hero-sheet {
+        position: fixed;
+        z-index: 6;
+        margin: 0;
+      }
+      #map-legend {
+        z-index: 4;
+        color: #e8e2c8;
+        font-size: 14px;
+        line-height: 1.2;
+        pointer-events: none;
+        text-shadow: 0 1px 0 #000;
+      }
+      #dock-bar {
+        z-index: 5;
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
         box-sizing: border-box;
-        min-height: 400px;
-        max-height: 92vh;
+        padding: 2px 4px 0;
+        pointer-events: none;
+      }
+      #dock-hud,
+      #dock-hint {
+        margin: 0;
+        line-height: 1.25;
+        pointer-events: none;
+      }
+      #dock-hud {
+        color: #f4ecd2;
+        font-size: 13px;
+      }
+      #dock-hint {
+        color: #d5e2b8;
+        font-size: 12px;
+      }
+      #dock-buttons {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-top: 2px;
+      }
+      #dock-left {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        pointer-events: auto;
+      }
+      #dock-left button,
+      #fight-btn {
+        margin: 0;
+        padding: 3px 8px;
+        border: 1px solid #6a4a22;
+        background: #1a120c;
+        color: #f0d48a;
+        font-family: Arial, sans-serif;
+        font-size: 13px;
+        line-height: 1.2;
+        cursor: pointer;
+        pointer-events: auto;
+      }
+      #dock-left button.on {
+        background: #e6c36a;
+        color: #14200f;
+      }
+      #fight-btn {
+        margin-left: auto;
+        background: #7cff7c;
+        color: #14200f;
+        border-color: #2a6a2a;
+        font-size: 15px;
+        font-weight: bold;
+      }
+      #fight-btn:disabled {
+        opacity: 0.45;
+      }
+      #roster,
+      #shared-bag {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        padding: 2px;
+        background: #120c08ee;
+        border: 1px solid #6a4a22;
+      }
+      #roster[hidden],
+      #shared-bag[hidden],
+      #friend-dock[hidden] {
+        display: none;
+      }
+      #friend-dock {
+        width: auto;
+        max-width: 240px;
+        padding: 4px;
+        background: #120c08f2;
+        border: 1px solid #6a4a22;
+        box-sizing: border-box;
+      }
+      #auto-dock {
+        display: flex;
+        align-items: center;
+        gap: 3px;
+        padding: 2px 4px;
+        background: #1a120c;
+        border: 1px solid #6a4a22;
+        color: #f0d48a;
+        font-size: 14px;
+        line-height: 1;
+        pointer-events: auto;
+      }
+      #auto-dock input {
+        margin: 0;
+        width: 14px;
+        height: 14px;
+      }
+      #hero-sheet {
+        width: 340px;
+        max-height: 70vh;
         overflow: auto;
+      }
+      #hero-sheet:empty {
+        display: none;
       }
       #roster h2,
       #hero-sheet h2 {
         margin: 0 0 8px;
         font-size: 16px;
       }
-      #roster-search,
-      #roster-type,
-      #roster-sort,
-      #map-pick {
-        width: 100%;
-        box-sizing: border-box;
-        margin-bottom: 6px;
-        padding: 6px;
+      .roster-filters {
+        display: flex;
+        gap: 2px;
+        margin: 0;
+      }
+      .roster-filters select {
+        width: auto;
+        margin: 0;
+        padding: 0 2px;
         background: #11170f;
         color: #f4ecd2;
         border: 1px solid #3d4a30;
-      }
-      .roster-filters {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 6px;
+        font-size: 11px;
       }
       .roster-list {
-        max-height: 200px;
-        overflow: auto;
-        margin: 8px 0 16px;
+        display: flex;
+        flex-direction: row;
+        gap: 2px;
+        margin: 0;
+        padding: 0;
+        overflow-x: auto;
+        max-width: min(720px, 80vw);
       }
       .roster-card {
-        display: grid;
-        grid-template-columns: 1fr 32px;
-        gap: 4px;
-        margin-bottom: 6px;
+        position: relative;
+        margin: 0;
+        padding: 0;
       }
-      .roster-card .pick,
-      .roster-card .fav {
-        border: 1px solid #6a7a50;
-        background: #2a3322;
-        color: #f4ecd2;
+      .roster-face {
+        display: block;
+        margin: 0;
+        padding: 0;
+        line-height: 0;
+        background: #1a120c;
+        border: 2px solid #6a7a50;
         cursor: pointer;
-        text-align: left;
       }
-      .roster-card .pick {
+      .roster-face canvas {
+        display: block;
+        width: 40px;
+        height: 44px;
+        image-rendering: pixelated;
+      }
+      .roster-card.selected .roster-face {
+        outline: 1px solid #fff6df;
+        outline-offset: 1px;
+      }
+      .roster-card .fav {
+        position: absolute;
+        top: 0;
+        right: 0;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: #ffe7a0;
+        font-size: 10px;
+        line-height: 1;
+        cursor: pointer;
+      }
+      .bag-list {
+        display: flex;
+        flex-direction: row;
+        gap: 2px;
+        margin: 0;
+        padding: 0;
+        overflow-x: auto;
+        max-width: min(860px, 78vw);
+      }
+      .item-face {
         display: flex;
         flex-direction: column;
-        gap: 2px;
-        padding: 6px;
-        font-size: 12px;
+        align-items: center;
+        justify-content: center;
+        width: 44px;
+        height: 44px;
+        margin: 0;
+        padding: 0;
+        flex: 0 0 auto;
+        line-height: 1.05;
+        background: #1a120c;
+        color: #fff6df;
+        border: 2px solid #c8c8c8;
+        cursor: pointer;
       }
-      .roster-card.selected .pick {
-        outline: 2px solid #7cff7c;
+      .item-face span {
+        color: #f0d48a;
+        font-size: 8px;
       }
-      .roster-card.deployed .pick {
-        background: #3a4a28;
+      .item-face strong {
+        font-size: 9px;
+        font-weight: normal;
       }
-      .roster-card.type-speed .pick {
-        border-left: 4px solid #4aa3ff;
+      .item-face.worn {
+        opacity: 0.4;
       }
-      .roster-card.type-damager .pick {
-        border-left: 4px solid #e24b4b;
-      }
-      .roster-card.type-mage .pick {
-        border-left: 4px solid #b56bff;
-      }
-      .roster-card .fav {
-        font-size: 18px;
-      }
-      .check,
-      #next-wave,
-      #next-wave.visible {
-        display: none;
+      .bag-warn {
+        margin: 0 0 0 4px;
+        font-size: 11px;
       }
       #roster .muted,
       #shared-bag .muted,
@@ -173,36 +347,18 @@
       }
       .hero-card-body {
         display: grid;
-        grid-template-columns: 1fr 148px;
-        gap: 8px;
-        padding: 8px;
-      }
-      .hero-stats {
-        margin: 0;
-      }
-      .stat-row {
-        display: grid;
-        grid-template-columns: 1fr auto;
-        gap: 8px;
-        margin-bottom: 4px;
-        background: #1c120c;
-        border: 1px solid #6a4a22;
-        padding: 3px 6px;
-        font-size: 12px;
-      }
-      .stat-row dt {
-        color: #f0d48a;
-      }
-      .stat-row dd {
-        margin: 0;
-        color: #fff6df;
-        font-weight: bold;
+        grid-template-columns: 156px 148px;
+        align-items: stretch;
+        gap: 6px;
+        padding: 6px;
       }
       .hero-portrait-wrap {
         position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
         background: radial-gradient(circle at 50% 40%, #3a2418, #120c08 72%);
         border: 1px solid #e6c36a;
-        min-height: 188px;
       }
       .hero-portrait {
         display: block;
@@ -222,6 +378,28 @@
         font-size: 13px;
         font-weight: bold;
         padding: 3px 4px;
+      }
+      .hero-stats {
+        width: 156px;
+        margin: 0;
+      }
+      .stat-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+        margin-bottom: 4px;
+        background: #1c120c;
+        border: 1px solid #6a4a22;
+        padding: 3px 6px;
+        font-size: 12px;
+      }
+      .stat-row dt {
+        color: #f0d48a;
+      }
+      .stat-row dd {
+        margin: 0;
+        color: #fff6df;
+        font-weight: bold;
       }
       .hero-life {
         display: flex;
@@ -263,20 +441,20 @@
         font-weight: bold;
       }
       .hero-panel {
-        padding: 8px;
+        padding: 4px 6px;
       }
       .slot-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: 6px;
+        gap: 3px;
       }
       .equip-slot {
         display: flex;
         flex-direction: column;
         align-items: flex-start;
-        gap: 2px;
-        min-height: 52px;
-        padding: 6px;
+        gap: 0;
+        min-height: 0;
+        padding: 2px 4px;
         background: #1c120c;
         color: #fff6df;
         border: 1px solid #6a4a22;
@@ -384,10 +562,22 @@
       <p class="lead">Place heroes, fight a wave, then change formation and gear while paused. Every hero uses the same model — outfit, hair, and weapon tell them apart.</p>
       <div id="play">
         <div id="game"></div>
+        <p id="map-legend"></p>
+        <div id="dock-bar">
+          <p id="dock-hud"></p>
+          <p id="dock-hint"></p>
+          <div id="dock-buttons">
+            <div id="dock-left">
+              <button type="button" data-dock="heroes">⚔ HEROES</button>
+              <button type="button" data-dock="bag">🎒 BAG</button>
+              <button type="button" data-dock="friend">👤 FRIEND</button>
+              <label id="auto-dock" title="Auto next wave"><span>⏩</span><input type="checkbox" id="auto-wave" /></label>
+            </div>
+            <button type="button" id="fight-btn">FIGHT</button>
+          </div>
+        </div>
         <aside id="sidebar">
           <select id="map-pick"></select>
-          <label class="check"><input type="checkbox" id="auto-wave" /> Auto next wave</label>
-          <button id="next-wave" type="button">Next wave</button>
           <div id="roster"></div>
           <div id="shared-bag" hidden></div>
           <div id="friend-dock" hidden>

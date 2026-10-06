@@ -36,12 +36,12 @@ export class PlayScene extends Phaser.Scene {
   private runtime: BattleRuntime | null = null;
   private enemyActors = new Map<string, EnemyActor>();
   private heroActors = new Map<string, HeroActor>();
-  private hud!: Phaser.GameObjects.Text;
-  private hint!: Phaser.GameObjects.Text;
-  private fightBtn!: Phaser.GameObjects.Text;
+  private hud!: HTMLElement;
+  private hint!: HTMLElement;
+  private legendEl!: HTMLElement;
+  private fightBtn!: HTMLButtonElement;
   private seed = 42;
   private autoWaveEl!: HTMLInputElement;
-  private nextWaveEl!: HTMLButtonElement;
   private sheetEl!: HTMLElement;
   private rosterRefresh: (() => void) | null = null;
   private bursts = new Map<string, Phaser.GameObjects.Sprite>();
@@ -51,7 +51,8 @@ export class PlayScene extends Phaser.Scene {
   private inventoryBody!: HTMLElement;
   private bagEl!: HTMLElement;
   private dockMode: "heroes" | "bag" | "friend" = "heroes";
-  private dockButtons = new Map<string, Phaser.GameObjects.Text>();
+  private dockButtons = new Map<string, HTMLButtonElement>();
+  private dismissSelection?: (ev: PointerEvent) => void;
 
   constructor() {
     super("play");
@@ -132,12 +133,26 @@ export class PlayScene extends Phaser.Scene {
 
   private bindDom(): void {
     const auto = document.querySelector("#auto-wave")!;
-    const next = document.querySelector("#next-wave")!;
     this.autoWaveEl = auto.cloneNode(true) as HTMLInputElement;
-    this.nextWaveEl = next.cloneNode(true) as HTMLButtonElement;
     auto.replaceWith(this.autoWaveEl);
-    next.replaceWith(this.nextWaveEl);
     this.sheetEl = document.querySelector("#hero-sheet")!;
+    this.hud = document.querySelector("#dock-hud")!;
+    this.hint = document.querySelector("#dock-hint")!;
+    this.legendEl = document.querySelector("#map-legend")!;
+    this.legendEl.textContent = `${this.map.name}    dirt = route    green border = place along the path`;
+    this.fightBtn = document.querySelector("#fight-btn")!;
+    this.fightBtn.textContent = "FIGHT";
+    this.fightBtn.disabled = false;
+    this.fightBtn.onclick = () => this.onFight();
+    this.dockButtons.clear();
+    for (const button of Array.from(document.querySelectorAll<HTMLButtonElement>("[data-dock]"))) {
+      const key = button.dataset.dock ?? "";
+      button.onclick = () => this.onDock(key);
+      this.dockButtons.set(key, button);
+    }
+    if (this.dismissSelection) document.removeEventListener("pointerdown", this.dismissSelection);
+    this.dismissSelection = (ev) => this.onDismiss(ev);
+    document.addEventListener("pointerdown", this.dismissSelection);
     this.autoWaveEl.addEventListener("change", () => {
       this.runtime?.setAutoNext(this.autoWaveEl.checked);
       this.paintDock();
@@ -163,7 +178,13 @@ export class PlayScene extends Phaser.Scene {
     }
     this.bagEl = document.querySelector<HTMLElement>("#shared-bag")!;
     this.showDock();
-    this.nextWaveEl.addEventListener("click", () => this.continueWave());
+    this.refreshHud();
+    const dockObserver = new ResizeObserver(() => this.placeOverlays());
+    dockObserver.observe(this.game.canvas);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      dockObserver.disconnect();
+      if (this.dismissSelection) document.removeEventListener("pointerdown", this.dismissSelection);
+    });
     this.inventoryEl = document.querySelector("#inventory")!;
     this.inventoryBody = document.querySelector("#inventory-body")!;
     const close = document.querySelector<HTMLButtonElement>("#inventory-close")!;
@@ -179,12 +200,12 @@ export class PlayScene extends Phaser.Scene {
         this.selectedHeroId = heroId;
         this.refreshSheet();
         this.refreshHud();
-        this.rosterRefresh?.();
+        this.refreshRoster();
       },
       (heroId) => {
         const hero = this.player.heroes.find((h) => h.id === heroId);
         if (hero) hero.favorite = !hero.favorite;
-        this.rosterRefresh?.();
+        this.refreshRoster();
       },
       (heroId) => this.placements.has(heroId),
     ).refresh;
@@ -216,14 +237,6 @@ export class PlayScene extends Phaser.Scene {
         }
       }
     }
-
-    this.add
-      .text(MAP_PAD, 4, `${this.map.name}    dirt = route    green border = place along the path`, {
-        fontFamily: "Arial",
-        fontSize: "14px",
-        color: "#e8e2c8",
-      })
-      .setOrigin(0, 0);
 
     const seen = new Set<string>();
     for (const path of this.map.paths) {
@@ -258,68 +271,22 @@ export class PlayScene extends Phaser.Scene {
           .setDepth(3);
       }
     }
-    this.hud = this.add.text(MAP_PAD + 6, top + 2, "", {
-      fontFamily: "Arial",
-      fontSize: "12px",
-      color: "#f4ecd2",
-    }).setDepth(6);
-    this.hint = this.add.text(MAP_PAD + 6, top + 16, "", {
-      fontFamily: "Arial",
-      fontSize: "11px",
-      color: "#d5e2b8",
-    }).setDepth(6);
+  }
 
-    const buttons: Array<{ key: string; icon: string; label: string }> = [
-      { key: "heroes", icon: "⚔", label: "HEROES" },
-      { key: "bag", icon: "🎒", label: "BAG" },
-      { key: "friend", icon: "👤", label: "FRIEND" },
-      { key: "auto", icon: "↻", label: "AUTO" },
-      { key: "next", icon: "»", label: "NEXT" },
-    ];
-    const buttonY = top + 44;
-    const span = MAP_COLS * TILE_PX - 108;
-    buttons.forEach((button, index) => {
-      const x = MAP_PAD + 8 + (index * span) / buttons.length;
-      const label = this.add
-        .text(x, buttonY, `${button.icon}  ${button.label}`, {
-          fontFamily: "Arial",
-          fontSize: "13px",
-          color: "#f0d48a",
-          backgroundColor: "#1a120c",
-          padding: { x: 8, y: 6 },
-        })
-        .setDepth(6)
-        .setInteractive({ useHandCursor: true });
-      label.on("pointerdown", () => this.onDock(button.key));
-      this.dockButtons.set(button.key, label);
-    });
-    this.fightBtn = this.add
-      .text(MAP_PAD + MAP_COLS * TILE_PX - 8, buttonY, " FIGHT ", {
-        fontFamily: "Arial",
-        fontSize: "16px",
-        color: "#14200f",
-        backgroundColor: "#7CFF7C",
-        padding: { x: 10, y: 6 },
-      })
-      .setOrigin(1, 0)
-      .setDepth(6)
-      .setInteractive({ useHandCursor: true })
-      .on("pointerdown", () => this.startFight());
-    this.refreshHud();
+  /** Starts the battle, and sends the next wave once a wave is cleared. */
+  private onFight(): void {
+    if (this.runtime?.finished) {
+      this.scene.restart();
+      return;
+    }
+    if (this.runtime?.waitingForNextWave) {
+      this.continueWave();
+      return;
+    }
+    if (!this.runtime) this.startFight();
   }
 
   private onDock(key: string): void {
-    if (key === "auto") {
-      this.autoWaveEl.checked = !this.autoWaveEl.checked;
-      this.autoWaveEl.dispatchEvent(new Event("change"));
-      this.paintDock();
-      return;
-    }
-    if (key === "next") {
-      this.continueWave();
-      this.paintDock();
-      return;
-    }
     if (key === "heroes" || key === "bag" || key === "friend") {
       this.dockMode = key;
       this.showDock();
@@ -334,6 +301,108 @@ export class PlayScene extends Phaser.Scene {
     if (friend) friend.hidden = this.dockMode !== "friend";
     if (this.dockMode === "bag") this.refreshBag();
     this.paintDock();
+    this.placeOverlays();
+  }
+
+  private refreshRoster(): void {
+    this.rosterRefresh?.();
+    this.placeOverlays();
+  }
+
+  private pagePoint(gameX: number, gameY: number): { x: number; y: number } {
+    const rect = this.game.canvas.getBoundingClientRect();
+    return {
+      x: rect.left + (gameX / this.scale.width) * rect.width,
+      y: rect.top + (gameY / this.scale.height) * rect.height,
+    };
+  }
+
+  /** Keep a floating panel on screen. minY stops it from sliding up over the dock buttons. */
+  private pin(el: HTMLElement, x: number, y: number, minY = 2): void {
+    el.style.left = `${x}px`;
+    el.style.top = `${y}px`;
+    const box = el.getBoundingClientRect();
+    if (box.right > window.innerWidth - 2) el.style.left = `${Math.max(2, x - (box.right - window.innerWidth) - 2)}px`;
+    if (box.bottom > window.innerHeight - 2) el.style.top = `${Math.max(minY, y - (box.bottom - window.innerHeight) - 2)}px`;
+  }
+
+  /** Screen position of the strip that sits under the dock buttons. */
+  private stripPoint(): { x: number; y: number } {
+    const buttons = document.querySelector("#dock-buttons");
+    const dock = document.querySelector("#dock-bar");
+    if (!buttons || !dock) return { x: 8, y: 8 };
+    const row = buttons.getBoundingClientRect();
+    const bar = dock.getBoundingClientRect();
+    return { x: bar.left, y: row.bottom + 2 };
+  }
+
+  private placeOverlays(): void {
+    const dock = document.querySelector<HTMLElement>("#dock-bar");
+    const legend = this.legendEl;
+    if (dock) {
+      const origin = this.pagePoint(MAP_PAD, MAP_PAD + MAP_ROWS * TILE_PX);
+      const far = this.pagePoint(MAP_PAD + MAP_COLS * TILE_PX, MAP_PAD + (MAP_ROWS + UI_ROWS) * TILE_PX);
+      dock.style.left = `${origin.x}px`;
+      dock.style.top = `${origin.y}px`;
+      dock.style.width = `${Math.max(0, far.x - origin.x)}px`;
+      dock.style.height = `${Math.max(0, far.y - origin.y)}px`;
+    }
+    if (legend) {
+      const origin = this.pagePoint(MAP_PAD, 6);
+      legend.style.left = `${origin.x}px`;
+      legend.style.top = `${origin.y}px`;
+    }
+    const roster = document.querySelector<HTMLElement>("#roster");
+    const friend = document.querySelector<HTMLElement>("#friend-dock");
+    const strip = this.stripPoint();
+    if (roster && !roster.hidden) this.pin(roster, strip.x, strip.y, strip.y);
+    if (this.bagEl && !this.bagEl.hidden) this.pin(this.bagEl, strip.x, strip.y, strip.y);
+    if (friend && !friend.hidden) this.pin(friend, strip.x, strip.y, strip.y);
+    this.placeHeroSheet();
+  }
+
+  private placeHeroSheet(): void {
+    const sheet = this.sheetEl;
+    if (!sheet) return;
+    if (!this.selectedHeroId || !sheet.innerHTML.trim()) {
+      sheet.style.display = "none";
+      return;
+    }
+    sheet.style.display = "block";
+    const slotId = this.placements.get(this.selectedHeroId);
+    const slot = slotId ? this.map.slots.find((entry) => entry.id === slotId) : undefined;
+    if (slot) {
+      const pos = worldToScreen(slot.x, slot.y);
+      const page = this.pagePoint(pos.x + 22, pos.y - 18);
+      this.pin(sheet, page.x, page.y);
+      this.keepAboveDock(sheet);
+      return;
+    }
+    const face = document.querySelector<HTMLElement>(`[data-select="${this.selectedHeroId}"]`);
+    if (face) {
+      const box = face.getBoundingClientRect();
+      const height = sheet.getBoundingClientRect().height;
+      const dockTop = this.dockTop();
+      const above = dockTop == null ? box.top : dockTop - height - 2;
+      this.pin(sheet, box.right + 4, above);
+      this.keepAboveDock(sheet);
+      return;
+    }
+    this.pin(sheet, 8, 8);
+  }
+
+  private dockTop(): number | null {
+    const buttons = document.querySelector("#dock-buttons");
+    if (!buttons) return null;
+    return buttons.getBoundingClientRect().top;
+  }
+
+  /** The details card stays above the dock so it does not cover the buttons or the strip. */
+  private keepAboveDock(el: HTMLElement): void {
+    const top = this.dockTop();
+    if (top == null) return;
+    const box = el.getBoundingClientRect();
+    if (box.bottom > top - 1) el.style.top = `${Math.max(2, top - box.height - 2)}px`;
   }
 
   private refreshBag(): void {
@@ -343,31 +412,57 @@ export class PlayScene extends Phaser.Scene {
       this.refreshHeroViews();
       this.refreshSheet();
       this.refreshBag();
-      this.rosterRefresh?.();
+      this.refreshRoster();
       this.refreshHud();
     });
   }
 
   private paintDock(): void {
     for (const [key, button] of this.dockButtons) {
-      const on = key === this.dockMode || (key === "auto" && this.autoWaveEl?.checked);
-      button.setColor(on ? "#14200f" : "#f0d48a");
-      button.setBackgroundColor(on ? "#e6c36a" : "#1a120c");
+      button.classList.toggle("on", key === this.dockMode);
     }
-    const waiting = Boolean(this.runtime?.waitingForNextWave && !this.runtime.finished);
-    this.dockButtons.get("next")?.setAlpha(waiting ? 1 : 0.45);
+    const running = Boolean(this.runtime && !this.runtime.finished && !this.runtime.waitingForNextWave);
+    if (this.fightBtn && this.fightBtn.textContent === "FIGHT") this.fightBtn.disabled = running;
+  }
+
+  /** Hide the details card unless the click landed on a hero, the roster, or the card itself. */
+  private onDismiss(ev: PointerEvent): void {
+    const target = ev.target;
+    if (!(target instanceof Node)) return;
+    if (this.sheetEl?.contains(target)) return;
+    if (document.querySelector("#roster")?.contains(target)) return;
+    if (this.bagEl?.contains(target)) return;
+    if (target instanceof Element && target.closest("#game canvas")) return;
+    this.clearSelection();
+  }
+
+  private clearSelection(): void {
+    if (!this.selectedHeroId) return;
+    this.selectedHeroId = null;
+    this.refreshHeroViews();
+    this.refreshSheet();
+    this.refreshRoster();
+    this.refreshHud();
   }
 
   private onClick(pointer: Phaser.Input.Pointer): void {
-    if (!this.canEdit()) return;
-    if (pointer.y > MAP_PAD + MAP_ROWS * TILE_PX) return;
+    if (pointer.y > MAP_PAD + MAP_ROWS * TILE_PX) {
+      this.clearSelection();
+      return;
+    }
     const col = Math.floor((pointer.x - MAP_PAD) / TILE_PX);
     const row = Math.floor((pointer.y - MAP_PAD) / TILE_PX);
-    if (row < 0 || col < 0 || row >= MAP_ROWS || col >= MAP_COLS) return;
+    if (row < 0 || col < 0 || row >= MAP_ROWS || col >= MAP_COLS) {
+      this.clearSelection();
+      return;
+    }
     const tile = this.tiles[row]![col]!;
-    if (!tile.placeable || !tile.slotId) return;
-
     const occupant = [...this.placements.entries()].find(([, slot]) => slot === tile.slotId);
+    if (!tile.placeable || !tile.slotId) {
+      if (!occupant) this.clearSelection();
+      return;
+    }
+
     if (occupant) {
       const heroId = occupant[0];
       const paused = Boolean(this.runtime?.waitingForNextWave);
@@ -383,18 +478,22 @@ export class PlayScene extends Phaser.Scene {
       }
       this.refreshHeroViews();
       this.refreshSheet();
-      this.rosterRefresh?.();
+      this.refreshRoster();
       this.refreshHud();
       return;
     }
 
+    if (!this.canEdit()) {
+      this.clearSelection();
+      return;
+    }
     const heroId = this.selectedHeroId ?? this.nextUnplacedHero();
     if (!heroId) return;
     this.placements.set(heroId, tile.slotId);
     this.runtime?.moveHero(heroId, tile.slotId, this.player.heroes.find((h) => h.id === heroId));
     this.refreshHeroViews();
     this.refreshSheet();
-    this.rosterRefresh?.();
+    this.refreshRoster();
     this.refreshHud();
   }
 
@@ -427,11 +526,11 @@ export class PlayScene extends Phaser.Scene {
   private startFight(): void {
     if (this.runtime) return;
     if (this.placements.size === 0) {
-      this.hint.setText("Place at least one hero on a green-border tile.");
+      this.hint.textContent = "Place at least one hero on a green-border tile.";
       return;
     }
     if (this.player.energy < ENERGY.perWave) {
-      this.hint.setText("Need 1 energy to start a wave.");
+      this.hint.textContent = "Need 1 energy to start a wave.";
       return;
     }
     const deployments: BattleDeployment[] = [...this.placements.entries()].map(([heroId, slotId]) => ({
@@ -445,19 +544,18 @@ export class PlayScene extends Phaser.Scene {
       account: this.player,
     });
     for (const actor of this.heroActors.values()) actor.setCombat(true);
-    this.fightBtn.setAlpha(0.35);
+    this.fightBtn.disabled = true;
     this.refreshHud();
   }
 
   private continueWave(): void {
     if (!this.runtime || this.runtime.finished || !this.runtime.waitingForNextWave) return;
     if (!this.runtime.canAffordNextWave()) {
-      this.hint.setText("Need 1 energy to start the next wave.");
+      this.hint.textContent = "Need 1 energy to start the next wave.";
       return;
     }
     this.runtime.refreshHeroStats();
     this.runtime.startNextWave();
-    this.nextWaveEl.classList.remove("visible");
     this.refreshHud();
   }
 
@@ -468,8 +566,9 @@ export class PlayScene extends Phaser.Scene {
       this.refreshHeroViews();
       this.refreshSheet();
       if (this.dockMode === "bag") this.refreshBag();
-      this.rosterRefresh?.();
+      this.refreshRoster();
       this.refreshHud();
+      this.placeOverlays();
     }, {
       deployed: Boolean(heroId && this.placements.has(heroId) && this.canEdit()),
       onRecall: () => {
@@ -478,10 +577,11 @@ export class PlayScene extends Phaser.Scene {
         this.runtime?.removeHero(heroId);
         this.refreshHeroViews();
         this.refreshSheet();
-        this.rosterRefresh?.();
+        this.refreshRoster();
         this.refreshHud();
       },
     });
+    this.placeOverlays();
   }
 
   private syncUnits(): void {
@@ -520,12 +620,10 @@ export class PlayScene extends Phaser.Scene {
     }
     if (event.type === "waveCleared") {
       collectLoot(this.player, this.runtime!.takeLoot());
-      if (this.runtime?.waitingForNextWave) this.nextWaveEl.classList.add("visible");
       this.refreshSheet();
     }
     if (event.type === "end" && this.runtime?.result) {
       collectLoot(this.player, this.runtime.takeLoot());
-      this.nextWaveEl.classList.remove("visible");
       this.showResult();
     }
   }
@@ -597,28 +695,22 @@ export class PlayScene extends Phaser.Scene {
     const name = selected ? heroDef(selected.defId).name : "none";
     const energy = `energy ${this.player.energy}/${ENERGY.max}`;
     if (!this.runtime) {
-      this.hud.setText(
-        `Place heroes  |  ${energy}  |  selected ${name}  |  deployed ${this.placements.size}  |  castle 20`,
-      );
-      this.hint.setText("Pick a hero, then click a green tile. Each wave costs 1 energy.");
+      this.hud.textContent = `Place heroes  |  ${energy}  |  selected ${name}  |  deployed ${this.placements.size}  |  castle 20`;
+      this.hint.textContent = "Pick a hero, then click a green tile. Each wave costs 1 energy.";
       this.paintDock();
       return;
     }
     const r = this.runtime;
     const pause = r.waitingForNextWave ? "  |  PAUSED" : "";
-    this.hud.setText(
-      `Wave ${r.wave || 1}  |  ${energy}  |  castle ${Math.max(0, r.castleHp)}/20  |  time ${r.time.toFixed(1)}s  |  living ${r.living().length}${pause}`,
-    );
-    this.hint.setText(
+    this.hud.textContent = `Wave ${r.wave || 1}  |  ${energy}  |  castle ${Math.max(0, r.castleHp)}/20  |  time ${r.time.toFixed(1)}s  |  living ${r.living().length}${pause}`;
+    this.hint.textContent =
       r.finished
         ? ""
         : r.waitingForNextWave
           ? this.player.energy < ENERGY.perWave
             ? "Out of energy. Each wave costs 1."
-            : "Paused. Double-click a hero to take them off the map, then Next wave."
-          : "Hitbox: Speed 1, Damager 2, Mage 3. Boss leak fails the run. Trash -1, elite -5.",
-    );
-    this.nextWaveEl.classList.toggle("visible", Boolean(r.waitingForNextWave));
+            : "Paused. Double-click a hero to take them off the map, then Fight."
+          : "Hitbox: Speed 1, Damager 2, Mage 3. Boss leak fails the run. Trash -1, elite -5.";
     this.paintDock();
   }
 
@@ -654,7 +746,9 @@ export class PlayScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setDepth(30);
-    this.fightBtn.setText("RESET").setAlpha(1).removeAllListeners("pointerdown").on("pointerdown", () => this.scene.restart());
+    this.fightBtn.textContent = "RESET";
+    this.fightBtn.disabled = false;
+    this.fightBtn.onclick = () => this.scene.restart();
   }
 
   private openInventory(victory: boolean): void {
@@ -664,7 +758,7 @@ export class PlayScene extends Phaser.Scene {
     renderInventory(this.inventoryBody, this.player, new Rng(this.seed + 99), victory, () => {
       this.openInventory(victory);
       this.refreshSheet();
-      this.rosterRefresh?.();
+      this.refreshRoster();
     });
   }
 }
