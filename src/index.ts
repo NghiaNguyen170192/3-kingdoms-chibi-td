@@ -10,4 +10,5 @@ export * from "./battle.js";
 export * from "./map/tiles.js";
 export * from "./roster.js";
 export * from "./player.js";
+export * from "./save.js";
 export * from "./game.js";

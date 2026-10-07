@@ -45,7 +45,8 @@ let seq = 0;
 
 export function createId(prefix: string): string {
   seq += 1;
-  return `${prefix}-${seq.toString(36)}`;
+  const salt = Math.floor(Math.random() * 0xffffffff).toString(36);
+  return `${prefix}-${seq.toString(36)}-${salt}`;
 }
 
 export function resetIds(): void {

@@ -5,6 +5,7 @@ import { mergeHeroes, mergeItems, mergePlayerGems } from "../player.js";
 import type { Rng } from "../rng.js";
 import { formatItem } from "../stats.js";
 import type { PlayerState } from "../types.js";
+import { gemCell, iconHtml, itemCell } from "./itemIcon.js";
 
 export function renderInventory(
   root: HTMLElement,
@@ -20,7 +21,12 @@ export function renderInventory(
       return `<button type="button" data-merge-items="${ids}">Merge 5 ${escapeHtml(sample.name)} (${escapeHtml(sample.rarity)})</button>`;
     })
     .join("");
-  const items = player.inventory.map((item) => `<li>${escapeHtml(formatItem(item))}</li>`).join("");
+  const items = player.inventory
+    .map(
+      (item) =>
+        `<li class="loot-row">${iconHtml(itemCell(item.baseId, item.rarity), 28)}<span>${escapeHtml(formatItem(item))}</span></li>`,
+    )
+    .join("");
 
   const gemGroups = gemMergeGroups(player.gems)
     .map((group) => {
@@ -29,7 +35,12 @@ export function renderInventory(
       return `<button type="button" data-merge-gems="${ids}">Merge 3 ${escapeHtml(sample.name)} Lv.${sample.level}</button>`;
     })
     .join("");
-  const gems = player.gems.map((gem) => `<li>${escapeHtml(gem.name)} Lv.${gem.level}</li>`).join("");
+  const gems = player.gems
+    .map(
+      (gem) =>
+        `<li class="loot-row">${iconHtml(gemCell(gem.family, gem.level), 28)}<span>${escapeHtml(gem.name)} Lv.${gem.level}</span></li>`,
+    )
+    .join("");
 
   const heroBuckets = new Map<string, typeof player.heroes>();
   for (const hero of player.heroes) {

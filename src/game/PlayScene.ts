@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { BattleRuntime } from "../battle.js";
 import { ENERGY, MAPS, heroDef, mapById } from "../data.js";
 import { collectLoot, createNewPlayer, grantClearReward } from "../player.js";
+import { browserStore, createAccount, loadGame, writeGame, type GameSave, type PlayerAccount } from "../save.js";
 import { Rng } from "../rng.js";
 import { renderInventory } from "./inventoryPanel.js";
 import { EnemyActor } from "./enemyActor.js";
@@ -29,6 +30,7 @@ import type { BattleDeployment, BattleEvent, ImbuedElement, MapDef, PlayerState 
 
 export class PlayScene extends Phaser.Scene {
   private player!: PlayerState;
+  private account!: PlayerAccount;
   private map!: MapDef;
   private tiles: MapTile[][] = [];
   private selectedHeroId: string | null = null;
@@ -83,8 +85,11 @@ export class PlayScene extends Phaser.Scene {
     }
     this.textures.get(FOREST_KEY).setFilter(Phaser.Textures.FilterMode.NEAREST);
     registerImbuedEffects(this);
-    this.player = createNewPlayer();
-    this.map = playMap(selectedMap());
+    const save = loadGame(browserStore());
+    this.account = save?.account ?? createAccount();
+    this.player = save?.player ?? createNewPlayer();
+    this.map = playMap(selectedMap(save?.mapId));
+    if (!this.demoMode()) this.restoreSetup(save);
     this.tiles = generateTiles(this.map);
     this.drawMap();
     this.drawDock();
@@ -92,7 +97,8 @@ export class PlayScene extends Phaser.Scene {
     this.refreshHeroViews();
     this.refreshSheet();
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => this.onClick(pointer));
-    if (new URLSearchParams(window.location.search).has("demo")) {
+    if (!save) this.persist();
+    if (this.demoMode()) {
       const demoSlots = pickDemoSlots(this.tiles);
       const demoHeroes = ["zhao-yun", "guan-yu", "zhuge-liang"]
         .map((id) => this.player.heroes.find((h) => h.defId === id))
@@ -123,11 +129,15 @@ export class PlayScene extends Phaser.Scene {
       this.refreshHud();
       return;
     }
+    const energyBefore = this.player.energy;
     const events = this.runtime.step(delta / 1000);
     this.syncUnits();
     for (const event of events) this.handleEvent(event);
     const fresh = this.runtime.takeLoot();
-    if (fresh.items.length || fresh.gems.length || fresh.gold) collectLoot(this.player, fresh);
+    if (fresh.items.length || fresh.gems.length || fresh.gold || fresh.energy) collectLoot(this.player, fresh);
+    if (this.player.energy !== energyBefore || fresh.items.length || fresh.gems.length || fresh.gold || fresh.energy) {
+      this.persist();
+    }
     this.refreshHud();
   }
 
@@ -170,6 +180,7 @@ export class PlayScene extends Phaser.Scene {
         }),
       );
       mapPick.addEventListener("change", () => {
+        this.persist(mapPick.value);
         const params = new URLSearchParams(window.location.search);
         params.set("map", mapPick.value);
         window.history.replaceState(null, "", `${window.location.pathname}?${params.toString()}`);
@@ -205,6 +216,7 @@ export class PlayScene extends Phaser.Scene {
       (heroId) => {
         const hero = this.player.heroes.find((h) => h.id === heroId);
         if (hero) hero.favorite = !hero.favorite;
+        this.persist();
         this.refreshRoster();
       },
       (heroId) => this.placements.has(heroId),
@@ -326,14 +338,76 @@ export class PlayScene extends Phaser.Scene {
     if (box.bottom > window.innerHeight - 2) el.style.top = `${Math.max(minY, y - (box.bottom - window.innerHeight) - 2)}px`;
   }
 
-  /** Screen position of the strip that sits under the dock buttons. */
-  private stripPoint(): { x: number; y: number } {
+  private demoMode(): boolean {
+    return new URLSearchParams(window.location.search).has("demo");
+  }
+
+  /** Write the account, stash, and this map's hero placement. Skipped for the demo query. */
+  private persist(nextMapId = this.map.id): void {
+    if (this.demoMode()) return;
+    const previous = loadGame(browserStore());
+    const setups = (previous?.setups ?? []).filter((setup) => setup.mapId !== this.map.id);
+    setups.push({
+      mapId: this.map.id,
+      placements: [...this.placements.entries()].map(([heroId, slotId]) => ({ heroId, slotId })),
+    });
+    const cleared = new Set(previous?.clearedMaps ?? []);
+    if (this.rewarded) cleared.add(this.map.id);
+    const save: GameSave = {
+      version: 1,
+      account: this.account,
+      player: this.player,
+      mapId: nextMapId,
+      setups,
+      clearedMaps: [...cleared],
+    };
+    writeGame(browserStore(), save);
+  }
+
+  private restoreSetup(save: GameSave | null): void {
+    const setup = save?.setups.find((entry) => entry.mapId === this.map.id);
+    if (!setup) return;
+    const used = new Set<string>();
+    for (const placement of setup.placements) {
+      const hero = this.player.heroes.some((entry) => entry.id === placement.heroId);
+      const slot = this.map.slots.some((entry) => entry.id === placement.slotId);
+      if (!hero || !slot || used.has(placement.slotId)) continue;
+      used.add(placement.slotId);
+      this.placements.set(placement.heroId, placement.slotId);
+    }
+  }
+
+  /** Two tile rows under the button row, from the Heroes button to the Fight button. */
+  private pinStrip(el: HTMLElement, x: number, y: number, width: number): void {
+    el.style.left = `${Math.round(x)}px`;
+    el.style.top = `${Math.round(y)}px`;
+    el.style.width = `${Math.max(0, Math.round(width))}px`;
+  }
+
+  /** Left edge of the Heroes button, just under the button row, out to the Fight button. */
+  private stripFrame(): { x: number; y: number; width: number } {
+    const heroes = document.querySelector("[data-dock=heroes]");
+    const fight = document.querySelector("#fight-btn");
     const buttons = document.querySelector("#dock-buttons");
+    if (!heroes || !fight || !buttons) return { x: 8, y: 8, width: 400 };
+    const left = heroes.getBoundingClientRect().left;
+    const right = fight.getBoundingClientRect().right;
+    const y = buttons.getBoundingClientRect().bottom + 2;
+    return { x: left, y, width: Math.max(0, right - left) };
+  }
+
+  /** Map picker sits in the open dock space above Fight, sharing Fight's right edge. */
+  private placeMapPick(): void {
+    const mapPick = document.querySelector<HTMLElement>("#map-pick");
+    const fight = document.querySelector("#fight-btn");
     const dock = document.querySelector("#dock-bar");
-    if (!buttons || !dock) return { x: 8, y: 8 };
-    const row = buttons.getBoundingClientRect();
-    const bar = dock.getBoundingClientRect();
-    return { x: bar.left, y: row.bottom + 2 };
+    if (!mapPick || !fight || !dock) return;
+    const fightBox = fight.getBoundingClientRect();
+    const dockBox = dock.getBoundingClientRect();
+    const width = mapPick.offsetWidth;
+    mapPick.style.right = "auto";
+    mapPick.style.left = `${Math.round(fightBox.right - width)}px`;
+    mapPick.style.top = `${Math.round(dockBox.top + 2)}px`;
   }
 
   private placeOverlays(): void {
@@ -354,10 +428,18 @@ export class PlayScene extends Phaser.Scene {
     }
     const roster = document.querySelector<HTMLElement>("#roster");
     const friend = document.querySelector<HTMLElement>("#friend-dock");
-    const strip = this.stripPoint();
-    if (roster && !roster.hidden) this.pin(roster, strip.x, strip.y, strip.y);
-    if (this.bagEl && !this.bagEl.hidden) this.pin(this.bagEl, strip.x, strip.y, strip.y);
-    if (friend && !friend.hidden) this.pin(friend, strip.x, strip.y, strip.y);
+    const strip = this.stripFrame();
+    if (roster && !roster.hidden) {
+      this.pinStrip(roster, strip.x, strip.y, strip.width);
+      const list = roster.querySelector<HTMLElement>(".roster-list");
+      if (list) {
+        const room = window.innerHeight - list.getBoundingClientRect().top - 8;
+        list.style.maxHeight = `${Math.max(96, Math.min(194, Math.floor(room)))}px`;
+      }
+    }
+    if (this.bagEl && !this.bagEl.hidden) this.pinStrip(this.bagEl, strip.x, strip.y, strip.width);
+    if (friend && !friend.hidden) this.pinStrip(friend, strip.x, strip.y, Math.min(strip.width, 240));
+    this.placeMapPick();
     this.placeHeroSheet();
   }
 
@@ -414,6 +496,7 @@ export class PlayScene extends Phaser.Scene {
       this.refreshBag();
       this.refreshRoster();
       this.refreshHud();
+      this.persist();
     });
   }
 
@@ -473,6 +556,7 @@ export class PlayScene extends Phaser.Scene {
         this.placements.delete(heroId);
         this.runtime?.removeHero(heroId);
         this.selectedHeroId = heroId;
+        this.persist();
       } else {
         this.selectedHeroId = heroId;
       }
@@ -491,6 +575,7 @@ export class PlayScene extends Phaser.Scene {
     if (!heroId) return;
     this.placements.set(heroId, tile.slotId);
     this.runtime?.moveHero(heroId, tile.slotId, this.player.heroes.find((h) => h.id === heroId));
+    this.persist();
     this.refreshHeroViews();
     this.refreshSheet();
     this.refreshRoster();
@@ -569,12 +654,14 @@ export class PlayScene extends Phaser.Scene {
       this.refreshRoster();
       this.refreshHud();
       this.placeOverlays();
+      this.persist();
     }, {
       deployed: Boolean(heroId && this.placements.has(heroId) && this.canEdit()),
       onRecall: () => {
         if (!heroId || !this.canEdit()) return;
         this.placements.delete(heroId);
         this.runtime?.removeHero(heroId);
+        this.persist();
         this.refreshHeroViews();
         this.refreshSheet();
         this.refreshRoster();
@@ -734,6 +821,7 @@ export class PlayScene extends Phaser.Scene {
       this.rewarded = true;
       grantClearReward(this.player, new Rng(this.seed + 99));
     }
+    this.persist();
     this.openInventory(result.victory);
     this.add
       .text(this.scale.width / 2, 220, body, {
@@ -759,14 +847,20 @@ export class PlayScene extends Phaser.Scene {
       this.openInventory(victory);
       this.refreshSheet();
       this.refreshRoster();
+      this.persist();
     });
   }
 }
 
-function selectedMap() {
-  const id = new URLSearchParams(window.location.search).get("map");
+function selectedMap(savedId?: string): MapDef {
+  const query = new URLSearchParams(window.location.search).get("map");
+  const id = query || savedId;
   if (!id) return MAPS[0]!;
-  return mapById(id);
+  try {
+    return mapById(id);
+  } catch {
+    return MAPS[0]!;
+  }
 }
 
 function pickDemoSlots(tiles: MapTile[][]): string[] {

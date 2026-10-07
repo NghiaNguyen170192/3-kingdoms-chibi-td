@@ -57,7 +57,7 @@ export function bindRosterPanel(
       const hero = player.heroes.find((entry) => entry.id === btn.dataset.select);
       const canvas = btn.querySelector("canvas");
       if (!hero || !canvas) return;
-      stops.push(mountHeroPortrait(canvas, armedLook(hero.defId, hero.gems), 0.62));
+      stops.push(mountHeroPortrait(canvas, armedLook(hero.defId, hero.gems), 1.24));
     });
     listEl.querySelectorAll<HTMLButtonElement>("[data-fav]").forEach((btn) => {
       btn.addEventListener("click", (ev) => {
@@ -79,7 +79,7 @@ function cardHtml(hero: HeroInstance, selected: boolean): string {
   return `
     <div class="roster-card ${selected ? "selected" : ""}">
       <button type="button" class="roster-face type-${escapeHtml(def.archetype)}" data-select="${hero.id}" title="${escapeHtml(def.name)}" style="border-color:${TYPE_BORDER[def.archetype]}">
-        <canvas width="40" height="44"></canvas>
+        <canvas width="80" height="88"></canvas>
       </button>
       <button type="button" class="fav" data-fav="${hero.id}" title="Favorite">${star}</button>
     </div>

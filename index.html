@@ -49,9 +49,7 @@
       }
       #map-pick {
         position: fixed;
-        top: 4px;
-        right: 4px;
-        z-index: 4;
+        z-index: 6;
         width: auto;
         margin: 0;
         padding: 2px 4px;
@@ -59,6 +57,7 @@
         color: #f4ecd2;
         border: 1px solid #3d4a30;
         font-size: 12px;
+        pointer-events: auto;
       }
       #map-legend,
       #dock-bar,
@@ -108,11 +107,15 @@
         gap: 8px;
         margin-top: 2px;
       }
-      #dock-left {
+      #dock-left,
+      #dock-right {
         display: flex;
         align-items: center;
         gap: 6px;
         pointer-events: auto;
+      }
+      #dock-right {
+        margin-left: auto;
       }
       #dock-left button,
       #fight-btn {
@@ -132,7 +135,6 @@
         color: #14200f;
       }
       #fight-btn {
-        margin-left: auto;
         background: #7cff7c;
         color: #14200f;
         border-color: #2a6a2a;
@@ -145,8 +147,10 @@
       #roster,
       #shared-bag {
         display: flex;
-        align-items: center;
+        flex-direction: column;
+        align-items: stretch;
         gap: 2px;
+        box-sizing: border-box;
         padding: 2px;
         background: #120c08ee;
         border: 1px solid #6a4a22;
@@ -208,22 +212,39 @@
         border: 1px solid #3d4a30;
         font-size: 11px;
       }
-      .roster-list {
-        display: flex;
-        flex-direction: row;
+      .roster-list,
+      .bag-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, 48px);
+        grid-auto-rows: 48px;
+        align-content: start;
         gap: 2px;
         margin: 0;
         padding: 0;
-        overflow-x: auto;
-        max-width: min(720px, 80vw);
+        width: 100%;
+        height: 98px;
+        overflow-x: hidden;
+        overflow-y: auto;
+      }
+      .roster-list {
+        grid-template-columns: repeat(auto-fill, 96px);
+        grid-auto-rows: 96px;
+        height: 194px;
       }
       .roster-card {
         position: relative;
+        width: 96px;
+        height: 96px;
         margin: 0;
         padding: 0;
       }
       .roster-face {
-        display: block;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
+        width: 96px;
+        height: 96px;
         margin: 0;
         padding: 0;
         line-height: 0;
@@ -233,8 +254,8 @@
       }
       .roster-face canvas {
         display: block;
-        width: 40px;
-        height: 44px;
+        width: 80px;
+        height: 88px;
         image-rendering: pixelated;
       }
       .roster-card.selected .roster-face {
@@ -254,38 +275,65 @@
         line-height: 1;
         cursor: pointer;
       }
-      .bag-list {
+      .bag-filters {
         display: flex;
-        flex-direction: row;
         gap: 2px;
+        align-items: center;
+      }
+      .bag-filters select {
+        width: auto;
         margin: 0;
-        padding: 0;
-        overflow-x: auto;
-        max-width: min(860px, 78vw);
+        padding: 0 2px;
+        background: #11170f;
+        color: #f4ecd2;
+        border: 1px solid #3d4a30;
+        font-size: 11px;
+      }
+      .bag-search {
+        box-sizing: border-box;
+        flex: 1;
+        min-width: 0;
+        width: auto;
+        margin: 0;
+        padding: 2px 6px;
+        background: #11170f;
+        color: #f4ecd2;
+        border: 1px solid #3d4a30;
+        font-size: 12px;
       }
       .item-face {
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        width: 44px;
-        height: 44px;
+        box-sizing: border-box;
+        width: 48px;
+        height: 48px;
         margin: 0;
         padding: 0;
-        flex: 0 0 auto;
         line-height: 1.05;
         background: #1a120c;
         color: #fff6df;
         border: 2px solid #c8c8c8;
         cursor: pointer;
       }
-      .item-face span {
-        color: #f0d48a;
-        font-size: 8px;
+      .sprite-icon {
+        display: block;
+        flex: 0 0 auto;
+        background-repeat: no-repeat;
+        image-rendering: pixelated;
+        image-rendering: crisp-edges;
       }
       .item-face strong {
         font-size: 9px;
         font-weight: normal;
+        color: #f0d48a;
+      }
+      .loot-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0 0 4px;
       }
       .item-face.worn {
         opacity: 0.4;
@@ -299,6 +347,11 @@
       #friend-dock .muted {
         color: #c8d6a3;
         font-size: 12px;
+      }
+      .roster-list .muted,
+      .bag-list .muted {
+        grid-column: 1 / -1;
+        margin: 4px;
       }
       #shared-bag h2,
       #friend-dock h2 {
@@ -450,15 +503,26 @@
       }
       .equip-slot {
         display: flex;
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0;
+        flex-direction: row;
+        align-items: center;
+        gap: 4px;
         min-height: 0;
         padding: 2px 4px;
         background: #1c120c;
         color: #fff6df;
         border: 1px solid #6a4a22;
         text-align: left;
+      }
+      .slot-copy {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+      .slot-copy strong {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 108px;
       }
       .equip-slot.filled {
         cursor: pointer;
@@ -477,7 +541,6 @@
         font-size: 12px;
         font-weight: normal;
       }
-      .equip-slot i,
       .bag-row i {
         display: inline-block;
         width: 10px;
@@ -571,9 +634,11 @@
               <button type="button" data-dock="heroes">⚔ HEROES</button>
               <button type="button" data-dock="bag">🎒 BAG</button>
               <button type="button" data-dock="friend">👤 FRIEND</button>
-              <label id="auto-dock" title="Auto next wave"><span>⏩</span><input type="checkbox" id="auto-wave" /></label>
             </div>
-            <button type="button" id="fight-btn">FIGHT</button>
+            <div id="dock-right">
+              <label id="auto-dock" title="Auto next wave"><span>⏩</span><input type="checkbox" id="auto-wave" /></label>
+              <button type="button" id="fight-btn">FIGHT</button>
+            </div>
           </div>
         </div>
         <aside id="sidebar">

@@ -1,7 +1,8 @@
-import { heroDef } from "../data.js";
+import { RARITY_ORDER, heroDef } from "../data.js";
 import { socket, suggestSlot, unequip, unsocket, wear } from "../player.js";
 import { computeHeroStats, formatItem } from "../stats.js";
 import type { EquipSlot, GemFamily, HeroInstance, Item, PlayerState, Rarity, WornSlot } from "../types.js";
+import { gemCell, iconHtml, itemCell } from "./itemIcon.js";
 import { armedLook } from "./manaSeed.js";
 import { mountHeroPortrait } from "./heroPortrait.js";
 
@@ -145,12 +146,12 @@ function gearSlots(hero: HeroInstance): string {
   return SLOTS.map(({ id, label }) => {
     const item = hero.equipment[id];
     if (id === "offHand" && item && item === hero.equipment.mainHand) {
-      return `<button type="button" class="equip-slot filled" disabled><span>${label}</span><strong>Two-hand</strong></button>`;
+      return `<button type="button" class="equip-slot filled" disabled style="border-color:${RARITY_BORDER[item.rarity]}">${iconHtml(itemCell(item.baseId, item.rarity), 24)}<span class="slot-copy"><span>${label}</span><strong>Two-hand</strong></span></button>`;
     }
     if (!item) {
-      return `<button type="button" class="equip-slot" disabled><span>${label}</span><strong>Empty</strong></button>`;
+      return `<button type="button" class="equip-slot" disabled><span class="slot-copy"><span>${label}</span><strong>Empty</strong></span></button>`;
     }
-    return `<button type="button" class="equip-slot filled" data-unequip="${id}" title="${escapeHtml(formatItem(item))}"><span>${label}</span><strong>${escapeHtml(item.name)}</strong></button>`;
+    return `<button type="button" class="equip-slot filled" data-unequip="${id}" title="${escapeHtml(formatItem(item))}" style="border-color:${RARITY_BORDER[item.rarity]}">${iconHtml(itemCell(item.baseId, item.rarity), 24)}<span class="slot-copy"><span>${label}</span><strong>${escapeHtml(item.name)}</strong></span></button>`;
   }).join("");
 }
 
@@ -158,24 +159,12 @@ function gemSlots(hero: HeroInstance): string {
   return hero.gems
     .map((gem, index) => {
       if (!gem) {
-        return `<button type="button" class="equip-slot" disabled><span>Socket ${index + 1}</span><strong>Empty</strong></button>`;
+        return `<button type="button" class="equip-slot" disabled><span class="slot-copy"><span>Socket ${index + 1}</span><strong>Empty</strong></span></button>`;
       }
-      const tint = GEM_TINT[gem.family];
-      return `<button type="button" class="equip-slot filled" data-unsocket="${index}" title="${escapeHtml(gem.name)} Lv.${gem.level}"><i style="background:${tint}"></i><span>Socket ${index + 1}</span><strong>${escapeHtml(gem.name)}</strong></button>`;
+      return `<button type="button" class="equip-slot filled" data-unsocket="${index}" title="${escapeHtml(gem.name)} Lv.${gem.level}" style="border-color:${GEM_TINT[gem.family]}">${iconHtml(gemCell(gem.family, gem.level), 24)}<span class="slot-copy"><span>Lv.${gem.level}</span><strong>${escapeHtml(gem.name)}</strong></span></button>`;
     })
     .join("");
 }
-
-const SLOT_MARK: Record<EquipSlot, string> = {
-  helmet: "Helm",
-  body: "Body",
-  gloves: "Glove",
-  belt: "Belt",
-  boots: "Boot",
-  ring: "Ring",
-  amulet: "Amu",
-  weapon: "Wpn",
-};
 
 const RARITY_BORDER: Record<Rarity, string> = {
   normal: "#c8c8c8",
@@ -186,6 +175,28 @@ const RARITY_BORDER: Record<Rarity, string> = {
   mythic: "#b56bff",
 };
 
+let bagSearch = "";
+let bagType = "";
+let bagRarity = "";
+
+const BAG_TYPES: Array<{ id: EquipSlot | "gem" | ""; label: string }> = [
+  { id: "", label: "Type" },
+  { id: "weapon", label: "Weapon" },
+  { id: "helmet", label: "Helmet" },
+  { id: "body", label: "Body" },
+  { id: "gloves", label: "Gloves" },
+  { id: "belt", label: "Belt" },
+  { id: "boots", label: "Boots" },
+  { id: "ring", label: "Ring" },
+  { id: "amulet", label: "Amulet" },
+  { id: "gem", label: "Gem" },
+];
+
+function matchesQuery(query: string, text: string): boolean {
+  if (!query) return true;
+  return text.toLowerCase().includes(query);
+}
+
 /** Account stash. One copy of an item can be worn by only one hero. */
 export function renderSharedBag(
   root: HTMLElement,
@@ -194,25 +205,76 @@ export function renderSharedBag(
   onChange: () => void,
 ): void {
   const hero = heroId ? player.heroes.find((entry) => entry.id === heroId) : undefined;
+  const field = root.querySelector<HTMLInputElement>("#bag-search");
+  const typeEl = root.querySelector<HTMLSelectElement>("#bag-type");
+  const rarityEl = root.querySelector<HTMLSelectElement>("#bag-rarity");
+  if (field) bagSearch = field.value;
+  if (typeEl) bagType = typeEl.value;
+  if (rarityEl) bagRarity = rarityEl.value;
+  const focused = document.activeElement === field;
+  const caret = field?.selectionStart ?? bagSearch.length;
+  const query = bagSearch.trim().toLowerCase();
+  const typeOn = bagType !== "";
+  const rarityOn = bagRarity !== "";
+  const showItems = bagType !== "gem";
+  const showGems = !rarityOn && (bagType === "" || bagType === "gem");
   const worn = new Set(
     player.heroes.flatMap((entry) => Object.values(entry.equipment).filter(Boolean).map((item) => item!.id)),
   );
-  const items = player.inventory.map((item) => itemFace(item, worn.has(item.id))).join("");
-  const gems = player.gems
-    .map((gem) => {
-      const tint = GEM_TINT[gem.family];
-      return `<button type="button" class="item-face" data-socket="${gem.id}" title="${escapeHtml(gem.name)} Lv.${gem.level}" style="border-color:${tint}"><span>Gem</span><strong>Lv${gem.level}</strong></button>`;
-    })
-    .join("");
+  const items = showItems
+    ? player.inventory
+        .filter((item) => (bagType === "" || item.slot === bagType) && (bagRarity === "" || item.rarity === bagRarity))
+        .filter((item) => matchesQuery(query, `${item.name} ${item.slot} ${item.rarity}`))
+        .map((item) => itemFace(item, worn.has(item.id)))
+        .join("")
+    : "";
+  const gems = showGems
+    ? player.gems
+        .filter((gem) => matchesQuery(query, `${gem.name} ${gem.family} ${gem.level}`))
+        .map((gem) => {
+          const tint = GEM_TINT[gem.family];
+          return `<button type="button" class="item-face" data-socket="${gem.id}" title="${escapeHtml(gem.name)} Lv.${gem.level}" style="border-color:${tint}">${iconHtml(gemCell(gem.family, gem.level), 28)}<strong>Lv${gem.level}</strong></button>`;
+        })
+        .join("")
+    : "";
   const who = hero ? heroDef(hero.defId).name : "no hero selected";
   root.title = `Shared bag. Gold ${player.gold}. Equip onto ${who}.`;
+  const faces = `${items}${gems}`;
+  const empty = query || typeOn || rarityOn ? "No matches" : "Empty";
+  const typeOptions = BAG_TYPES.map(
+    (entry) => `<option value="${entry.id}"${entry.id === bagType ? " selected" : ""}>${entry.label}</option>`,
+  ).join("");
+  const rarityOptions = [`<option value="">Rarity</option>`]
+    .concat(
+      RARITY_ORDER.map(
+        (rarity) =>
+          `<option value="${rarity}"${rarity === bagRarity ? " selected" : ""}>${rarity[0]!.toUpperCase()}${rarity.slice(1)}</option>`,
+      ),
+    )
+    .join("");
   root.innerHTML = `
+    <div class="bag-filters">
+      <input id="bag-search" class="bag-search" type="search" placeholder="Search items" value="${escapeHtml(bagSearch)}" />
+      <select id="bag-type" title="Item type">${typeOptions}</select>
+      <select id="bag-rarity" title="Item rarity">${rarityOptions}</select>
+    </div>
     <div class="bag-list">
-      ${items}${gems || ""}
-      ${items || gems ? "" : `<p class="muted">Empty</p>`}
+      ${faces || `<p class="muted">${empty}</p>`}
     </div>
     <p class="warn bag-warn" hidden></p>
   `;
+  const input = root.querySelector<HTMLInputElement>("#bag-search");
+  const rerender = () => renderSharedBag(root, player, heroId, onChange);
+  input?.addEventListener("input", () => {
+    bagSearch = input.value;
+    rerender();
+  });
+  root.querySelector("#bag-type")?.addEventListener("change", rerender);
+  root.querySelector("#bag-rarity")?.addEventListener("change", rerender);
+  if (focused && input) {
+    input.focus();
+    input.setSelectionRange(caret, caret);
+  }
   const warn = root.querySelector<HTMLElement>(".bag-warn");
   const fail = (text: string) => {
     if (!warn) return;
@@ -254,9 +316,7 @@ export function renderSharedBag(
 }
 
 function itemFace(item: Item, worn: boolean): string {
-  const mark = SLOT_MARK[item.slot];
-  const label = item.name.length > 8 ? item.name.slice(0, 8) : item.name;
-  return `<button type="button" class="item-face${worn ? " worn" : ""}" data-equip="${item.id}" title="${escapeHtml(formatItem(item))}${worn ? " · worn" : ""}" style="border-color:${RARITY_BORDER[item.rarity]}"><span>${mark}</span><strong>${escapeHtml(label)}</strong></button>`;
+  return `<button type="button" class="item-face${worn ? " worn" : ""}" data-equip="${item.id}" title="${escapeHtml(formatItem(item))}${worn ? " · worn" : ""}" style="border-color:${RARITY_BORDER[item.rarity]}">${iconHtml(itemCell(item.baseId, item.rarity), 32)}</button>`;
 }
 
 function escapeHtml(text: string): string {
